@@ -1,12 +1,51 @@
+poll_interval: 60                   # [in seconds] How often M-Bus devices will be polled
+
 mqtt:
-  server:
-  port:
-  username: 
-  password: 
+  host: example.com
+  port: 1883
+  username: user
+  password: pass
+  base_topic: libmbus2mqtt
+  #custom_topic: example/devices/   # Setting this overrides base_topic and disables homeassistant section
 
 interface:
-  libmbus_path: /usr/local/bin/
+  libmbus_path: /usr/local/bin/     # Path where libmbus libraries are available
   baudrate: 2400
-  serial_device: /dev/ttyAMA0
+  serial_device: /dev/ttyAMA0       # Path where M-Bus Master is available via serial
 
+homeassistant:
+  autodiscovery: True               # Enable Home Assistant MQTT Discovery format for data publishing
+  discovery_prefix: homeassistant   # Home Assistant MQTT Discovery prefix. By default: homeassistant
+
+
+# Python logger configuration parameters  
 logger:
+  version: 1
+  formatters:
+    console:
+      format: '{asctime} {module} {levelname}: {message}'
+      datefmt: '%H:%M:%S'
+      style: '{'
+    file:
+      format: '{asctime} {module} {levelname}: {message}'
+      datefmt: '%Y-%m-%d %H:%M:%S'
+      style: '{'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      formatter: console
+      level: DEBUG
+      stream: ext://sys.stdout
+    file:
+      class : logging.handlers.RotatingFileHandler
+      formatter: file
+      filename: log/libmbus2mqtt.log
+      level: INFO
+      maxBytes: 10485760 #10MiB
+      backupCount: 4
+  root:
+    level: DEBUG
+    handlers:
+      - console
+      - file
+  disable_existing_loggers: False
