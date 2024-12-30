@@ -1,0 +1,66 @@
+{
+    "0": {
+        "name": "Fabrication Number",
+        "icon": "mdi:numeric",
+        "platform": "sensor",
+        "value_template":"{{ value_json.fabrication_number }}",
+        "entity_category": "diagnostic"
+    },
+    "1": {
+        "name": "Customer ID",
+        "icon": "mdi:card-account-details-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.customer_id }}",
+        "entity_category": "diagnostic"
+    },
+    "2": {
+        "name": "Time Point",
+        "icon": "mdi:calendar-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.time_point }}",
+        "entity_category": "diagnostic"
+    },
+    "3": {
+        "name": "Remaining Battery Time",
+        "icon": "mdi:battery-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.battery_time }}",
+        "device_class": "duration",
+        "unit_of_measurement": "h",
+        "entity_category": "diagnostic"
+    },
+    "4": {
+        "name": "Volume: Forward",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template": "{{ value_json.volume_forward | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "5": {
+        "name": "Volume: Reverse",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{  value_json.volume_reverse  | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "6": {
+        "name": "Volume: Month Start",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_month_start | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "7": {
+        "name": "Manufacturer Specific",
+        "icon": "mdi:hexadecimal",
+        "platform": "sensor",
+        "value_template":"{{ value_json.manufacturer_specific }}",
+        "entity_category": "diagnostic"
+    }
+}

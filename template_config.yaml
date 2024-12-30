@@ -1,0 +1,12 @@
+mqtt:
+  server:
+  port:
+  username: 
+  password: 
+
+interface:
+  libmbus_path: /usr/local/bin/
+  baudrate: 2400
+  serial_device: /dev/ttyAMA0
+
+logger:

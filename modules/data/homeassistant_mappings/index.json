@@ -1,0 +1,12 @@
+
+{
+    "itron_cyble_1_4.json": {
+        "Manufacturer": "ACW",
+        "ProductName": "Itron CYBLE M-Bus 1.4"
+    },
+    "apt-mbus-na-1.json": {
+        "Manufacturer": "APA",
+        "ProductName": null
+    }
+}
+

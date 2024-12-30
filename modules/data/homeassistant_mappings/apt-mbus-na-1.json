@@ -1,0 +1,95 @@
+{
+    "0": {
+        "name": "Fabrication Number",
+        "icon": "mdi:numeric",
+        "platform": "sensor",
+        "value_template":"{{ value_json.fabrication_number }}",
+        "entity_category": "diagnostic"
+    },
+    "1": {
+        "name": "Time Point (Time & Date)",
+        "icon": "mdi:calendar-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.time_point_datetime }}",
+        "entity_category": "diagnostic"
+    },
+    "2": {
+        "name": "Volume: Forward",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_forward | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "3": {
+        "name": "Volume: Flow",
+        "icon": "mdi:waves-arrow-right",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_flow | float / 1000 }}",
+        "device_class": "volume_flow_rate",
+        "unit_of_measurement": "m³/h",
+        "state_class": "MEASUREMENT"
+    },
+    "4": {
+        "name": "Volume: Month Start",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_month_start | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "5": {
+        "name": "Time Point (Date)",
+        "icon": "mdi:calendar-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.time_point_date }}",
+        "device_class": "date",
+        "entity_category": "diagnostic"
+    },
+    "6": {
+        "name": "Operating Time",
+        "icon": "mdi:battery-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.operating_time }}",
+        "device_class": "duration",
+        "unit_of_measurement": "d",
+        "entity_category": "diagnostic"
+    },
+    "7": {
+        "name": "Error Flags",
+        "icon": "mdi:alert-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.error_flags }}",
+        "entity_category": "diagnostic"
+    },
+    "8": {
+        "name": "Manufacturer Specific",
+        "icon": "mdi:card-text-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.manufacturer_specific_1 }}",
+        "entity_category": "diagnostic"
+    },
+    "9": {
+        "name": "Manufacturer Specific",
+        "icon": "mdi:card-text-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.manufacturer_specific_2 }}",
+        "entity_category": "diagnostic"
+    },
+    "10": {
+        "name": "Manufacturer Specific",
+        "icon": "mdi:card-text-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.manufacturer_specific_3 }}",
+        "entity_category": "diagnostic"
+    },
+    "11": {
+        "name": "Manufacturer Specific",
+        "icon": "mdi:hexadecimal",
+        "platform": "sensor",
+        "value_template":"{{ value_json.manufacturer_specific_4 }}",
+        "entity_category": "diagnostic"
+    }
+}
