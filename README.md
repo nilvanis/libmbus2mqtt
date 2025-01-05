@@ -207,7 +207,7 @@ You should get a response similar to this:
 </MBusData>
 ```
 Based on this output, you can identify each 'sensor' for Home Assistant, where by 'sensor' I mean each DataRecord.  
-```<SlaveInformation>``` is holds general device information you will also find in the Home Assistant MQTT device section.
+```<SlaveInformation>``` holds general device information you will also find in the Home Assistant MQTT device section.
 
 
 ## How to connect 'TTL to M-BUS' adapter to Raspberry Pi UART
