@@ -83,7 +83,7 @@ For matching, you can use any field from ```<SlaveInformation> ``` [libmbus xml 
     <...>
 }
 ```
-```0```, ```1```, etc. are section numbers defined as ```id``` number in <DataRecord id> from [libmbus xml output](#libmbus-xml-output).  
+```0```, ```1```, etc. are section numbers defined as ```id``` number in ```<DataRecord id>``` from [libmbus xml output](#libmbus-xml-output).  
 You must identify which section holds what information and based on that create a template.  
 Or you can just have generic sensors for everything.
 
