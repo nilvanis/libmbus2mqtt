@@ -231,10 +231,10 @@ Check pin numbers [here](https://pinout.xyz/)
 
 ## Supported devices
 ### Itron Cyble M-Bus
-[Itron Cyble M-Bus](../assets/itron-cyble-mbus.jpg?raw=true)
+![Itron Cyble M-Bus](../assets/itron-cyble-mbus.jpg?raw=true)
 Data sheet: https://se.itron.com/o/commerce-media/accounts/-1/attachments/3809944
 
 ### APATOR APT-MBUS-NA-1
-[APATOR APT-MBUS-NA-1](../assets/apt-mbus-na-1.jpg?raw=true)
+![APATOR APT-MBUS-NA-1](../assets/apt-mbus-na-1.jpg?raw=true)
 Data sheet: https://api.apator.com/uploads/oferta/woda-i-cieplo/systemy/przewodowy/apt-mbus-na/apt-mbus-na-1-catalogue.pdf
 
