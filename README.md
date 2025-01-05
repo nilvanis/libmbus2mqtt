@@ -220,7 +220,8 @@ Enable UART:
 
 2. Connect adapter do Raspberry Pi (40-PIN GPIO):  
 **First make sure all devices are disconnected from any power source!**  
-Check pin numbers [here](https://pinout.xyz/)  
+Check pin numbers [here](https://pinout.xyz/)
+
 | Raspberry Pi | TTL to MBUS |
 | -----------  | ----------- |
 | PIN 02       | TTLVCC      |
