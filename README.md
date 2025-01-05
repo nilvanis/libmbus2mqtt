@@ -17,7 +17,7 @@ Software is published 'as-is' without any guarantees.
 - TTL to M-Bus Master, like [this one](https://www.aliexpress.com/item/1005003292386193.html)
 - Raspberry Pi or anything with UART (USB-TTL converter should work as well, but have not tested)
 - Linux (tested on Raspbian 12)
-- libmbus
+- [libmbus](https://github.com/rscada/libmbus)
 - python3 (tested on version 3.11)
 
 ## Installation
@@ -55,7 +55,7 @@ If not, you must prepare a valid device template.
 
 Templates are stored as json files in ```libmbus2mqtt/data/homeassistant_mappings```.  
 To match a proper template, libmbus2mqtt uses definitions from ```index.json``` file.  
-Each entry syntax is as follows:
+Each entry syntax in ```index.json``` is as follows:
 ```json
     "<TEMPLATE_FILENAME.json>": {
         "Manufacturer": "ASDX",
@@ -88,6 +88,7 @@ You must identify which section holds what information and based on that create 
 Or you can just have generic sensors for everything.
 
 If you need help, raise an [issue](https://github.com/nilvanis/libmbus2mqtt/issues) and paste there your libmbus xml output, and I'll try to add a new template for you.
+  
 
 ## Running the tool
 To start libmbus2mqtt, simply run:
@@ -96,6 +97,7 @@ python3 main.py
 ```
 First, configuration will be loaded, libmbus path checked and then M-Bus will be scanned for available devices.  
 All found devices data will be published to MQTT.
+  
 
 ### (Optional) Run as systemd service
 You can run libmbus2mqtt as a service in the background and instruct the system to load it every time system boots.  
@@ -121,6 +123,7 @@ Now enable and run the service:
 sudo systemctl enable libmbus2mqtt.service
 sudo systemctl start libmbus2mqtt.service
 ```
+  
 
 ## Additional Info
 
@@ -145,8 +148,8 @@ homeassistant:
   autodiscovery: True               # Enable Home Assistant MQTT Discovery format for data publishing
   discovery_prefix: homeassistant   # Home Assistant MQTT Discovery prefix. By default: homeassistant
 ```
-
-
+  
+  
 ### libmbus XML output
 To test your libmbus installation, try below commands:
 ```cli
@@ -208,8 +211,8 @@ You should get a response similar to this:
 ```
 Based on this output, you can identify each 'sensor' for Home Assistant, where by 'sensor' I mean each DataRecord.  
 ```<SlaveInformation>``` holds general device information you will also find in the Home Assistant MQTT device section.
-
-
+  
+  
 ## How to connect 'TTL to M-BUS' adapter to Raspberry Pi UART
 1. In raspberry CLI:
 ```cli
@@ -220,7 +223,8 @@ Enable UART:
 
 2. Connect adapter do Raspberry Pi (40-PIN GPIO):  
 **First make sure all devices are disconnected from any power source!**  
-Check pin numbers [here](https://pinout.xyz/)  
+Check pin numbers [here](https://pinout.xyz/)
+
 | Raspberry Pi | TTL to MBUS |
 | -----------  | ----------- |
 | PIN 02       | TTLVCC      |
@@ -230,9 +234,9 @@ Check pin numbers [here](https://pinout.xyz/)
 | PIN 10       | RXD         |
 
 3. Power up Raspberry Pi. Serial device should be available at /dev/ttyAMA0
-
-
-
+  
+  
+  
 ## Supported devices
 ### Itron Cyble M-Bus
 ![Itron Cyble M-Bus](../assets/itron-cyble-mbus.jpg?raw=true)  
