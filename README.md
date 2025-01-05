@@ -221,13 +221,13 @@ Enable UART:
 2. Connect adapter do Raspberry Pi (40-PIN GPIO):  
 **First make sure all devices are disconnected from any power source!**  
 Check pin numbers [here](https://pinout.xyz/)  
-| Raspberry Pi| TTL to MBUS |
-| ----------- | ----------- |
-| PIN 02      | TTLVCC      |
-| PIN 04      | VIN         |
-| PIN 06      | GND         |
-| PIN 08      | TXD         |
-| PIN 10      | RXD         |
+| Raspberry Pi | TTL to MBUS |
+| -----------  | ----------- |
+| PIN 02       | TTLVCC      |
+| PIN 04       | VIN         |
+| PIN 06       | GND         |
+| PIN 08       | TXD         |
+| PIN 10       | RXD         |
 
 3. Power up Raspberry Pi. Serial device should be available at /dev/ttyAMA0
 
