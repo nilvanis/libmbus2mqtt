@@ -17,7 +17,7 @@ Software is published 'as-is' without any guarantees.
 - TTL to M-Bus Master, like [this one](https://www.aliexpress.com/item/1005003292386193.html)
 - Raspberry Pi or anything with UART (USB-TTL converter should work as well, but have not tested)
 - Linux (tested on Raspbian 12)
-- libmbus
+- [libmbus](https://github.com/rscada/libmbus)
 - python3 (tested on version 3.11)
 
 ## Installation
