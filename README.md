@@ -62,7 +62,7 @@ Each entry syntax is as follows:
         "ProductName": "Super Water Meter"
     }
 ```
-For matching, you can use any field from ```<SlaveInformation> ``` [libmbus xml output](#libmbus-xml-output).
+For matching, you can use any field from ```<SlaveInformation>``` [libmbus xml output](#libmbus-xml-output).
 
 **Device template JSON file** syntax is as follows:
 ```json
@@ -146,6 +146,7 @@ homeassistant:
   discovery_prefix: homeassistant   # Home Assistant MQTT Discovery prefix. By default: homeassistant
 ```
 
+
 ### libmbus XML output
 To test your libmbus installation, try below commands:
 ```cli
@@ -208,6 +209,7 @@ You should get a response similar to this:
 Based on this output, you can identify each 'sensor' for Home Assistant, where by 'sensor' I mean each DataRecord.  
 ```<SlaveInformation>``` is holds general device information you will also find in the Home Assistant MQTT device section.
 
+
 ## How to connect 'TTL to M-BUS' adapter to Raspberry Pi UART
 1. In raspberry CLI:
 ```cli
@@ -228,6 +230,8 @@ Check pin numbers [here](https://pinout.xyz/)
 | PIN 10      | RXD         |
 
 3. Power up Raspberry Pi. Serial device should be available at /dev/ttyAMA0
+
+
 
 ## Supported devices
 ### Itron Cyble M-Bus
