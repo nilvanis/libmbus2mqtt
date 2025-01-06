@@ -23,19 +23,19 @@ Software is published 'as-is' without any guarantees.
 ## Installation
 1. Clone this git repo and enter the directory:
   ```cli
-git clone https://github.com/nilvanis/libmbus2mqtt
-cd libmbus2mqtt
+  git clone https://github.com/nilvanis/libmbus2mqtt
+  cd libmbus2mqtt
   ```
 
 2. Create virtual environment and activate it:
   ```cli
-python3 -m venv .venv
-source .venv/bin/activate
+  python3 -m venv .venv
+  source .venv/bin/activate
   ```
 
 3. Install required libraries:
   ```cli
-python3 -m pip install -r requirements.txt
+  python3 -m pip install -r requirements.txt
   ```
 
 4. Install libmbus  
@@ -43,8 +43,8 @@ python3 -m pip install -r requirements.txt
 
 5. Prepare config.yaml
   ```cli
-cp template_config.yaml config.yaml
-nano config.yaml
+  cp template_config.yaml config.yaml
+  nano config.yaml
   ```
   Change settings to reflect your setup. More info [here](#configyaml).  
   Save file and exit (Ctrl+O, Ctrl+X).
