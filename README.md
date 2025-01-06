@@ -226,16 +226,16 @@ Next, enable UART by going through the menu:
 2. Connect adapter to the Raspberry Pi (via 40-PIN GPIO):  
 **First make sure all devices are disconnected from any power source!**  
 You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)  
-
-| Raspberry Pi | TTL to MBUS |
-| -----------  | ----------- |
-| PIN 02 (5V)  | TTLVCC      |
-| PIN 04 (5V)  | VIN         |
-| PIN 06 (GND) | GND         |
-| PIN 08 (TX)  | TXD         |
-| PIN 10 (RX)  | RXD         |
-
-<img src="../assets/libmbus2mqtt_rpi_converter.jpg" width="550">
+  
+    | Raspberry Pi | TTL to MBUS |
+    | -----------  | ----------- |
+    | PIN 02 (5V)  | TTLVCC      |
+    | PIN 04 (5V)  | VIN         |
+    | PIN 06 (GND) | GND         |
+    | PIN 08 (TX)  | TXD         |
+    | PIN 10 (RX)  | RXD         |
+  
+    <img src="../assets/libmbus2mqtt_rpi_converter.jpg" width="550">
   
   
 3. Power up Raspberry Pi. Serial device should be available at /dev/ttyAMA0
