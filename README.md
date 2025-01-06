@@ -34,9 +34,9 @@ Software is published 'as-is' without any guarantees.
     ```
 
 3. Install required libraries:
-  ```cli
-  python3 -m pip install -r requirements.txt
-  ```
+    ```cli
+    python3 -m pip install -r requirements.txt
+    ```
 
 4. Install libmbus
     (you can check [here](https://bends.se/?page=anteckningar/automation/m-bus/libmbus) for an example installation method)
