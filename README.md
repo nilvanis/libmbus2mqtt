@@ -22,35 +22,35 @@ Software is published 'as-is' without any guarantees.
 
 ## Installation
 1. Clone this git repo and enter the directory:
-```cli
-git clone https://github.com/nilvanis/libmbus2mqtt
-cd libmbus2mqtt
-```
+    ```cli
+    git clone https://github.com/nilvanis/libmbus2mqtt
+    cd libmbus2mqtt
+    ```
 
 2. Create virtual environment and activate it:
-```cli
-python3 -m venv .venv
-source .venv/bin/activate
-```
+    ```cli
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
 
 3. Install required libraries:
-```cli
-python3 -m pip install -r requirements.txt
-```
+    ```cli
+    python3 -m pip install -r requirements.txt
+    ```
 
-4. Install libmbus
+4. Install libmbus  
 (you can check [here](https://bends.se/?page=anteckningar/automation/m-bus/libmbus) for an example installation method)
 
 5. Prepare config.yaml
-```cli
-cp template_config.yaml config.yaml
-nano config.yaml
-```
-Change settings to reflect your setup. More info [here](#config.yaml).  
-Save file and exit (Ctrl+O, Ctrl+X).
+    ```cli
+    cp template_config.yaml config.yaml
+    nano config.yaml
+    ```
+    Change settings to reflect your setup. More info [here](#configyaml).  
+    Save file and exit (Ctrl+O, Ctrl+X).
 
 ### (Optional) Prepare and match device template for Home Assistant
-In case you use HA MQTT Discovery, check if your meter is on the [supported devices](#supported-devices) list.  
+In case you use HA MQTT Discovery, check if your meter is on the [supported devices](#supported-devices-home-assistant-mqtt-discovery) list.  
 If not, you must prepare a valid device template.
 
 Templates are stored as json files in ```libmbus2mqtt/data/homeassistant_mappings```.  
@@ -117,6 +117,7 @@ ExecStart=/home/user/libmbus2mqtt/.venv/bin/python3 /home/user/libmbus2mqtt/main
 [Install]
 WantedBy=multi-user.target
 ```
+Where ```/home/user/libmbus2mqtt/``` is your actual libmus2mqtt location.
 Save the file and exit (Ctrl+O, Ctrl+X).  
 Now enable and run the service:
 ```cli
@@ -211,33 +212,37 @@ You should get a response similar to this:
 ```
 Based on this output, you can identify each 'sensor' for Home Assistant, where by 'sensor' I mean each DataRecord.  
 ```<SlaveInformation>``` holds general device information you will also find in the Home Assistant MQTT device section.
-  
+
   
 ## How to connect 'TTL to M-BUS' adapter to Raspberry Pi UART
-1. In raspberry CLI:
-```cli
-sudo raspi-config
-```
-Enable UART:
-```3 Interface Options``` -> ```Serial Port``` -> ```<No>``` -> ```<Yes>```
+1. First, you need to enable UART. Skip if you already did that.  
+    In the Raspberry PI CLI run: 
+    ```cli
+    sudo raspi-config
+    ```
+    Next, enable UART by going through the menu:  
+    ```3 Interface Options``` -> ```Serial Port``` -> ```<No>``` -> ```<Yes>```
 
-2. Connect adapter do Raspberry Pi (40-PIN GPIO):  
+2. Connect adapter to the Raspberry Pi (via 40-PIN GPIO):  
 **First make sure all devices are disconnected from any power source!**  
-Check pin numbers [here](https://pinout.xyz/)
-
-| Raspberry Pi | TTL to MBUS |
-| -----------  | ----------- |
-| PIN 02       | TTLVCC      |
-| PIN 04       | VIN         |
-| PIN 06       | GND         |
-| PIN 08       | TXD         |
-| PIN 10       | RXD         |
-
+You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)  
+  
+    | Raspberry Pi | TTL to MBUS |
+    | -----------  | ----------- |
+    | PIN 02 (5V)  | TTLVCC      |
+    | PIN 04 (5V)  | VIN         |
+    | PIN 06 (GND) | GND         |
+    | PIN 08 (TX)  | TXD         |
+    | PIN 10 (RX)  | RXD         |
+  
+    <img src="../assets/libmbus2mqtt_rpi_converter.jpg" width="550">
+  
+  
 3. Power up Raspberry Pi. Serial device should be available at /dev/ttyAMA0
   
   
-  
-## Supported devices
+## Supported devices (Home Assistant MQTT Discovery)
+
 ### Itron Cyble M-Bus
 ![Itron Cyble M-Bus](../assets/itron-cyble-mbus.jpg?raw=true)  
 Data sheet: https://se.itron.com/o/commerce-media/accounts/-1/attachments/3809944
