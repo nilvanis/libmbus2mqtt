@@ -242,6 +242,7 @@ You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)
   
   
 ## Supported devices (Home Assistant MQTT Discovery)
+
 ### Itron Cyble M-Bus
 ![Itron Cyble M-Bus](../assets/itron-cyble-mbus.jpg?raw=true)  
 Data sheet: https://se.itron.com/o/commerce-media/accounts/-1/attachments/3809944
