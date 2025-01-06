@@ -224,11 +224,9 @@ Enable UART:
 
 2. Connect adapter do Raspberry Pi (40-PIN GPIO):  
 **First make sure all devices are disconnected from any power source!**  
-You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)
-
-![Raspberry Pi to MBUS converter wiring diagram](../assets/libmbus2mqtt_rpi_converter.jpg)
-
-| Raspberry Pi | TTL to MBUS |
+You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)  
+  
+![Raspberry Pi to MBUS converter wiring diagram](../assets/libmbus2mqtt_rpi_converter.jpg)| Raspberry Pi | TTL to MBUS |
 | -----------  | ----------- |
 | PIN 02 (5V)  | TTLVCC      |
 | PIN 04 (5V)  | VIN         |
