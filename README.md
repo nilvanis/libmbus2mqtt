@@ -45,7 +45,7 @@ python3 -m pip install -r requirements.txt
 ```cli
 cp template_config.yaml config.yaml
 nano config.yaml
-```
+```  
 Change settings to reflect your setup. More info [here](#configyaml).  
 Save file and exit (Ctrl+O, Ctrl+X).
 
