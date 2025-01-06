@@ -226,6 +226,7 @@ Enable UART:
 **First make sure all devices are disconnected from any power source!**  
 You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)  
   
+<p float="left">
 <img src="../assets/libmbus2mqtt_rpi_converter.jpg" width="600">
 
 | Raspberry Pi | TTL to MBUS |
@@ -236,6 +237,8 @@ You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)
 | PIN 08 (TX)  | TXD         |
 | PIN 10 (RX)  | RXD         |
 
+</p>
+  
 3. Power up Raspberry Pi. Serial device should be available at /dev/ttyAMA0
 
 
