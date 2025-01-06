@@ -216,7 +216,10 @@ Based on this output, you can identify each 'sensor' for Home Assistant, where b
   
 ## How to connect 'TTL to M-BUS' adapter to Raspberry Pi UART
 1. First, you need to enable UART. Skip if you already did that.  
-Run ```sudo raspi-config``` in the Raspberry PI CLI.  
+In the Raspberry PI CLI run: 
+    ```cli
+    sudo raspi-config
+    ```    
 Next, enable UART by going through the menu:  
 ```3 Interface Options``` -> ```Serial Port``` -> ```<No>``` -> ```<Yes>```
 
