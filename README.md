@@ -38,8 +38,8 @@ Software is published 'as-is' without any guarantees.
     python3 -m pip install -r requirements.txt
     ```
 
-4. Install libmbus
-    (you can check [here](https://bends.se/?page=anteckningar/automation/m-bus/libmbus) for an example installation method)
+4. Install libmbus  
+(you can check [here](https://bends.se/?page=anteckningar/automation/m-bus/libmbus) for an example installation method)
 
 5. Prepare config.yaml
     ```cli
