@@ -46,8 +46,8 @@ python3 -m pip install -r requirements.txt
 cp template_config.yaml config.yaml
 nano config.yaml
 ```  
-Change settings to reflect your setup. More info [here](#configyaml).  
-Save file and exit (Ctrl+O, Ctrl+X).
+  Change settings to reflect your setup. More info [here](#configyaml).  
+  Save file and exit (Ctrl+O, Ctrl+X).
 
 ### (Optional) Prepare and match device template for Home Assistant
 In case you use HA MQTT Discovery, check if your meter is on the [supported devices](#supported-devices-home-assistant-mqtt-discovery) list.  
