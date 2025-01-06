@@ -226,7 +226,8 @@ Enable UART:
 **First make sure all devices are disconnected from any power source!**  
 You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)  
   
-<img src="../assets/libmbus2mqtt_rpi_converter.jpg" width="200">
+<img src="../assets/libmbus2mqtt_rpi_converter.jpg" width="600">
+
 | Raspberry Pi | TTL to MBUS |
 | -----------  | ----------- |
 | PIN 02 (5V)  | TTLVCC      |
