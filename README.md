@@ -218,13 +218,15 @@ Based on this output, you can identify each 'sensor' for Home Assistant, where b
 1. In raspberry CLI:
 ```cli
 sudo raspi-config
-```
-Enable UART:
+```  
+Enable UART:  
 ```3 Interface Options``` -> ```Serial Port``` -> ```<No>``` -> ```<Yes>```
 
 2. Connect adapter do Raspberry Pi (40-PIN GPIO):  
 **First make sure all devices are disconnected from any power source!**  
-Check pin numbers [here](https://pinout.xyz/)
+You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)
+
+![Raspberry Pi to MBUS converter wiring diagram](../assets/libmbus2mqtt_rpi_converter.jpg)
 
 | Raspberry Pi | TTL to MBUS |
 | -----------  | ----------- |
@@ -233,8 +235,6 @@ Check pin numbers [here](https://pinout.xyz/)
 | PIN 06 (GND) | GND         |
 | PIN 08 (TX)  | TXD         |
 | PIN 10 (RX)  | RXD         |
-
-![Raspberry Pi to MBUS converter wiring diagram](../assets/libmbus2mqtt_rpi_converter.jpg)
 
 3. Power up Raspberry Pi. Serial device should be available at /dev/ttyAMA0
 
