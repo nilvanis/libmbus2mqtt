@@ -215,14 +215,12 @@ Based on this output, you can identify each 'sensor' for Home Assistant, where b
 
   
 ## How to connect 'TTL to M-BUS' adapter to Raspberry Pi UART
-1. In raspberry CLI:  
-```cli
-sudo raspi-config
-```  
-Enable UART:  
+1. First, you need to enable UART. Skip if you already did that.  
+Run ```sudo raspi-config``` in the Raspberry PI CLI.  
+Next, enable UART by going through the menu:  
 ```3 Interface Options``` -> ```Serial Port``` -> ```<No>``` -> ```<Yes>```
 
-2. Connect adapter do Raspberry Pi (40-PIN GPIO):  
+2. Connect adapter to the Raspberry Pi (via 40-PIN GPIO):  
 **First make sure all devices are disconnected from any power source!**  
 You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)  
 
@@ -234,7 +232,7 @@ You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)
 | PIN 08 (TX)  | TXD         |
 | PIN 10 (RX)  | RXD         |
 
-<img src="../assets/libmbus2mqtt_rpi_converter.jpg" width="600">
+<img src="../assets/libmbus2mqtt_rpi_converter.jpg" width="550">
   
   
 3. Power up Raspberry Pi. Serial device should be available at /dev/ttyAMA0
