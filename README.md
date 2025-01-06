@@ -219,7 +219,7 @@ Based on this output, you can identify each 'sensor' for Home Assistant, where b
     In the Raspberry PI CLI run: 
     ```cli
     sudo raspi-config
-    ```  
+    ```
     Next, enable UART by going through the menu:  
     ```3 Interface Options``` -> ```Serial Port``` -> ```<No>``` -> ```<Yes>```
 
