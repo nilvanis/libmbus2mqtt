@@ -102,8 +102,8 @@ while True:
                     time.sleep(2)
                 if mqtt.ha_republish:
                     for dev in devices:
-                        device.homeassistant_discovery_published = False
-                        mqtt.ha_republish = False
+                        dev.homeassistant_discovery_published = False
+                    mqtt.ha_republish = False
                 if device.homeassistant_discovery_published == False:
                     log.info(f"Publishing Home Assistant MQTT discovery payload for device ID: {device.device_id}")
                     device.homeassistant_get_data()
