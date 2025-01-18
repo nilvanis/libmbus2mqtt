@@ -7,6 +7,10 @@
     "apt-mbus-na-1.json": {
         "Manufacturer": "APA",
         "ProductName": null
+    },
+    "kamstrup_multical_401.json": {
+        "Manufacturer": "KAM",
+        "ProductName": "Kamstrup 382 (6850-005)"
     }
 }
 
