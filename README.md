@@ -251,3 +251,6 @@ Data sheet: https://se.itron.com/o/commerce-media/accounts/-1/attachments/380994
 ![APATOR APT-MBUS-NA-1](../assets/apt-mbus-na-1.jpg?raw=true)  
 Data sheet: https://api.apator.com/uploads/oferta/woda-i-cieplo/systemy/przewodowy/apt-mbus-na/apt-mbus-na-1-catalogue.pdf
 
+### Kamstrup Multical 401
+![Kamstrup Multical 401](../assets/kamstrup-multical-401.jpg?raw-true)
+Data Sheet: https://documentation.kamstrup.com/docs/MULTICAL_401/en-GB/Data_sheet/CONTF9A902FD213B4A1BB4F5122E640B3AB7/
