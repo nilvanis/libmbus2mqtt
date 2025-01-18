@@ -38,7 +38,7 @@ Software is published 'as-is' without any guarantees.
     python3 -m pip install -r requirements.txt
     ```
 
-4. Install libmbus  
+4. Install libmbus\
 (you can check [here](https://bends.se/?page=anteckningar/automation/m-bus/libmbus) for an example installation method)
 
 5. Prepare config.yaml
@@ -50,11 +50,11 @@ Software is published 'as-is' without any guarantees.
     Save file and exit (Ctrl+O, Ctrl+X).
 
 ### (Optional) Prepare and match device template for Home Assistant
-In case you use HA MQTT Discovery, check if your meter is on the [supported devices](#supported-devices-home-assistant-mqtt-discovery) list.  
+In case you use HA MQTT Discovery, check if your meter is on the [supported devices](#supported-devices-home-assistant-mqtt-discovery) list.\
 If not, you must prepare a valid device template.
 
-Templates are stored as json files in ```libmbus2mqtt/data/homeassistant_mappings```.  
-To match a proper template, libmbus2mqtt uses definitions from ```index.json``` file.  
+Templates are stored as json files in ```libmbus2mqtt/data/homeassistant_mappings```.\
+To match a proper template, libmbus2mqtt uses definitions from ```index.json``` file.\
 Each entry syntax in ```index.json``` is as follows:
 ```json
     "<TEMPLATE_FILENAME.json>": {
@@ -83,8 +83,8 @@ For matching, you can use any field from ```<SlaveInformation>``` [libmbus xml o
     <...>
 }
 ```
-```0```, ```1```, etc. are section numbers defined as ```id``` number in ```<DataRecord id>``` from [libmbus xml output](#libmbus-xml-output).  
-You must identify which section holds what information and based on that create a template.  
+```0```, ```1```, etc. are section numbers defined as ```id``` number in ```<DataRecord id>``` from [libmbus xml output](#libmbus-xml-output).\
+You must identify which section holds what information and based on that create a template.\
 Or you can just have generic sensors for everything.
 
 If you need help, raise an [issue](https://github.com/nilvanis/libmbus2mqtt/issues) and paste there your libmbus xml output, and I'll try to add a new template for you.
@@ -95,12 +95,12 @@ To start libmbus2mqtt, simply run:
 ```cli
 python3 main.py
 ```
-First, configuration will be loaded, libmbus path checked and then M-Bus will be scanned for available devices.  
+First, configuration will be loaded, libmbus path checked and then M-Bus will be scanned for available devices.\
 All found devices data will be published to MQTT.
   
 
 ### (Optional) Run as systemd service
-You can run libmbus2mqtt as a service in the background and instruct the system to load it every time system boots.  
+You can run libmbus2mqtt as a service in the background and instruct the system to load it every time system boots.\
 In order to do that, create a new service file:
 ```cli
 sudo nano /etc/systemd/system/libmbus2mqtt.service
@@ -210,22 +210,22 @@ You should get a response similar to this:
 
 </MBusData>
 ```
-Based on this output, you can identify each 'sensor' for Home Assistant, where by 'sensor' I mean each DataRecord.  
+Based on this output, you can identify each 'sensor' for Home Assistant, where by 'sensor' I mean each DataRecord.\
 ```<SlaveInformation>``` holds general device information you will also find in the Home Assistant MQTT device section.
 
   
 ## How to connect 'TTL to M-BUS' adapter to Raspberry Pi UART
-1. First, you need to enable UART. Skip if you already did that.  
+1. First, you need to enable UART. Skip if you already did that.\
     In the Raspberry PI CLI run: 
     ```cli
     sudo raspi-config
     ```
-    Next, enable UART by going through the menu:  
+    Next, enable UART by going through the menu:\
     ```3 Interface Options``` -> ```Serial Port``` -> ```<No>``` -> ```<Yes>```
 
-2. Connect adapter to the Raspberry Pi (via 40-PIN GPIO):  
-**First make sure all devices are disconnected from any power source!**  
-You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)  
+2. Connect adapter to the Raspberry Pi (via 40-PIN GPIO):\
+**First make sure all devices are disconnected from any power source!**\
+You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)\
   
     | Raspberry Pi | TTL to MBUS |
     | -----------  | ----------- |
@@ -244,13 +244,13 @@ You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)
 ## Supported devices (Home Assistant MQTT Discovery)
 
 ### Itron Cyble M-Bus
-![Itron Cyble M-Bus](../assets/itron-cyble-mbus.jpg?raw=true)  
+![Itron Cyble M-Bus](../assets/itron-cyble-mbus.jpg?raw=true)\
 Data sheet: https://se.itron.com/o/commerce-media/accounts/-1/attachments/3809944
 
 ### APATOR APT-MBUS-NA-1
-![APATOR APT-MBUS-NA-1](../assets/apt-mbus-na-1.jpg?raw=true)  
+![APATOR APT-MBUS-NA-1](../assets/apt-mbus-na-1.jpg?raw=true)\
 Data sheet: https://api.apator.com/uploads/oferta/woda-i-cieplo/systemy/przewodowy/apt-mbus-na/apt-mbus-na-1-catalogue.pdf
 
 ### Kamstrup Multical 401
-![Kamstrup Multical 401](../assets/kamstrup-multical-401.jpg?raw-true)
+![Kamstrup Multical 401](../assets/kamstrup-multical-401.jpg?raw-true)\
 Data Sheet: https://documentation.kamstrup.com/docs/MULTICAL_401/en-GB/Data_sheet/CONTF9A902FD213B4A1BB4F5122E640B3AB7/
