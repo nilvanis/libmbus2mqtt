@@ -1,0 +1,101 @@
+{
+    "0": {
+        "name": "Energy",
+        "icon": "mdi:lightning-bolt-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.energy }}",
+        "device_class": "energy",
+        "unit_of_measurement": "kWh",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "1": {
+        "name": "Volume",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template": "{{ value_json.volume | float / 100 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "2": {
+        "name": "On Time",
+        "icon": "mdi:clock-outline",
+        "platform": "sensor",
+        "value_template": "{{ value_json.on_time }}",
+        "unit_of_measurement": "h",
+        "state_class": "TOTAL_INCREASING",
+        "entity_category": "diagnostic"
+    },
+    "3": {
+        "name": "Flow Temperature",
+        "icon": "mdi:coolant-temperature",
+        "platform": "sensor",
+        "value_template": "{{ value_json.flow_temperature | float / 100 }}",
+        "device_class": "temperature",
+        "unit_of_measurement": "℃"
+    },
+    "4": {
+        "name": "Return Temperature",
+        "icon": "mdi:thermometer-chevron-down",
+        "platform": "sensor",
+        "value_template": "{{ value_json.return_temperature | float / 100 }}",
+        "device_class": "temperature",
+        "unit_of_measurement": "℃"
+    },
+    "5": {
+        "name": "Temperature Difference",
+        "icon": "mdi:thermometer-low",
+        "platform": "sensor",
+        "value_template": "{{ value_json.temperature_diff | float / 100 }}",
+        "device_class": "temperature",
+        "unit_of_measurement": "℃"
+    },
+    "6": {
+        "name": "Power",
+        "icon": "mdi:lightning-bolt-outline",
+        "platform": "sensor",
+        "value_template": "{{ value_json.power | float * 100 }}",
+        "device_class": "energy",
+        "unit_of_measurement": "W"
+    },
+    "7": {
+        "name": "Volume Flow",
+        "icon": "mdi:waves-arrow-right",
+        "platform": "sensor",
+        "value_template": "{{ value_json.volume_flow }}",
+        "device_class": "volume_flow_rate",
+        "unit_of_measurement": "m³/h"
+    },
+    "8": {
+        "name": "Energy: Time Point",
+        "icon": "mdi:lightning-bolt-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.energy_tp }}",
+        "device_class": "energy",
+        "unit_of_measurement": "kWh",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "9": {
+        "name": "Volume: Time Point",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template": "{{ value_json.volume_tp | float / 100 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "10": {
+        "name": "Time Point",
+        "icon": "mdi:calendar-clock",
+        "platform": "sensor",
+        "value_template": "{{ value_json.time_point }}",
+        "entity_category": "diagnostic"
+    },
+    "11": {
+        "name": "Manufacturer Specific",
+        "icon": "mdi:hexadecimal",
+        "platform": "sensor",
+        "value_template":"{{ value_json.manufacturer_specific }}",
+        "entity_category": "diagnostic"
+    }
+}
