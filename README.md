@@ -163,7 +163,7 @@ Found a M-Bus device at address 1
 ```
 Next, poll an M-Bus device:
 ```cli
-/usr/local/bin/mbus-serial-scan -b 2400 /dev/ttyAMA0 1
+/usr/local/bin/mbus-serial-request-data -b 2400 /dev/ttyAMA0 1
 ```
 where ```1``` is the discovered device address.
 
