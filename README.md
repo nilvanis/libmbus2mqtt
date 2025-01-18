@@ -225,7 +225,7 @@ Based on this output, you can identify each 'sensor' for Home Assistant, where b
 
 2. Connect adapter to the Raspberry Pi (via 40-PIN GPIO):\
 **First make sure all devices are disconnected from any power source!**\
-You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)\
+You can verify the Raspberry Pi GPIO pin numbers [here](https://pinout.xyz/)
   
     | Raspberry Pi | TTL to MBUS |
     | -----------  | ----------- |
