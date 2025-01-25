@@ -97,5 +97,23 @@
         "platform": "sensor",
         "value_template":"{{ value_json.manufacturer_specific }}",
         "entity_category": "diagnostic"
+    },
+    "custom-pulse_input_a_volume": {
+        "name": "Pulse Input A: Volume",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template": "{% set data = value_json.manufacturer_specific %} {{ data.split()[30:34] | reverse | join('') | int / 100 | round(2) }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "custom-pulse_input_b_volume": {
+        "name": "Pulse Input B: Volume",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template": "{% set data = value_json.manufacturer_specific %} {{ data.split()[34:38] | reverse | join('') | int / 100 | round(2) }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
     }
 }
