@@ -25,7 +25,7 @@ class MbusDeviceID:
 
     def __get__(self, obj, type=None) -> object:
         return obj._device_id
-    
+
     def __set__(self, obj, value):
         if type(value) == int:
             value = str(value)
@@ -54,7 +54,7 @@ class DeviceAvailability:
     @property
     def status(self):
         return self._status
-    
+
     @status.setter
     def status(self, value):
         allowed_options = ["online", "offline"]
@@ -107,10 +107,10 @@ class Interface:
         for req_binary in req_mbus_binaries:
             if Path(libmbus_path).joinpath(req_binary) not in libmbus_path_contents:
                 raise FileNotFoundError(f"libmbus serial binaries not found in {libmbus_path}")
-            
+
         try: baudrate = str(baudrate)
         except: raise ValueError(f"Invalid baudrate: {baudrate}")
-        
+
         if not re.match(regex_baudrate, baudrate):
             raise ValueError(f"Invalid baudrate: {baudrate}")
 
@@ -129,7 +129,7 @@ class Interface:
         if not self.CONFIG_OK:
             log.error(f"Cannot scan bus: Interface config invalid.")
             return
-        
+
         log.info(f"Scanning for M-Bus devices via {self.serial_device}, baudrate: {self.baudrate}")
         discovery_output = subprocess.run(
             [
@@ -145,14 +145,14 @@ class Interface:
 
         log.info(f"Found {len(discovered_devices)} devices in total.")
         return discovered_devices
-    
+
     def poll(self, device_id) -> ET:
         '''Poller method using libmbus in the OS'''
 
         if not self.CONFIG_OK:
             log.error(f"Cannot poll device: Interface config invalid.")
             return
- 
+
         self.device_id = device_id
         log.debug(f"Polling M-Bus device {device_id}")
         poll_output = subprocess.run(
@@ -164,7 +164,7 @@ class Interface:
                 ],
                 capture_output=True
                     )
-        
+
         return ET.fromstring(poll_output.stdout)
 
 class Device:
@@ -216,9 +216,9 @@ class Device:
             else:
                 xml_dict[element.tag] = element.text
             return xml_dict
-            
+
         return get_childs(xml_root)
-    
+
     def poll(self) -> ET:
         try:
             xml_data =  self.interface.poll(self.device_id)
@@ -226,7 +226,7 @@ class Device:
             log.error(f"Device ID '{self.device_id}' is unavailabile or does not provide valid data.")
             self.availability.poll_fail()
             return None
-        
+
         self.availability.poll_success()
         return xml_data
 
@@ -251,7 +251,7 @@ class Device:
             log.exception(e)
             return None
         return self.mbus_data
-    
+
     def homeassistant_get_template(self) -> json:
         HA_RELATIVE_TEMPLATE_PATH = 'data/homeassistant_mappings'
         TEMPLATES_INDEX_FILENAME = 'index.json'
@@ -262,7 +262,7 @@ class Device:
         ha_templates = [dirpath.resolve() for dirpath in Path(ha_template_path).iterdir() if dirpath.parts[-1] != TEMPLATES_INDEX_FILENAME]
         with open(ha_template_index_filepath) as file:
             ha_template_index = json.load(file)
-        
+
         for filename, matchlist in ha_template_index.items():
             for match in matchlist:
                 if matchlist[match] == self.mbus_data['SlaveInformation'][match]:
@@ -277,7 +277,7 @@ class Device:
             for filepath in ha_templates:
                 if filepath.parts[-1] == device_template_filename:
                     device_template_filepath = filepath
-            
+
             with open(device_template_filepath) as file:
                 self.homeassistant_template = json.load(file)
         else:
@@ -285,12 +285,16 @@ class Device:
 
         # Generate unique_id for each component
         for component_id in self.homeassistant_template:
-            json_name = self.homeassistant_get_template_component_json_value(component_id)
-            uid = f"{self.serial_number}_{json_name}"
+            if 'custom-' not in component_id:
+                json_name = self.homeassistant_get_template_component_json_value(component_id)
+                uid = f"{self.serial_number}_{json_name}"
+            else:
+                uid = f"{self.serial_number}_{component_id}"
+
             self.homeassistant_template[component_id]['unique_id'] = re.sub(r'[^a-zA-Z0-9_]', '', uid)
 
         return self.homeassistant_template
-    
+
     def homeassistant_get_data(self) -> json:
         if not self.homeassistant_template:
             self.homeassistant_get_template()
@@ -298,12 +302,14 @@ class Device:
             self.data_update()
         homeassistant_data = {}
         for component_id in self.homeassistant_template:
-            json_name = self.homeassistant_get_template_component_json_value(component_id)
-            homeassistant_data[json_name] = self.mbus_data['DataRecord'][component_id]['Value']
+            # Custom sensors do not have its own data from DataRecord
+            if 'custom-' not in component_id:
+                json_name = self.homeassistant_get_template_component_json_value(component_id)
+                homeassistant_data[json_name] = self.mbus_data['DataRecord'][component_id]['Value']
         self.homeassistant_data = json.dumps(homeassistant_data)
 
         return self.homeassistant_data
-    
+
     def homeassistant_get_template_component_json_value(self, component_id):
             '''Get component json field name for state payload'''
             regex = re.compile(r"(?<=value_json\.)(\S+)")
