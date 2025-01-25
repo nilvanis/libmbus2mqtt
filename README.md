@@ -81,11 +81,20 @@ For matching, you can use any field from ```<SlaveInformation>``` [libmbus xml o
         name, icon, platform, etc...
     },
     <...>
+    "custom-xxx": {
+        name, icon, platform, etc...
+    }
 }
 ```
-```0```, ```1```, etc. are section numbers defined as ```id``` number in ```<DataRecord id>``` from [libmbus xml output](#libmbus-xml-output).\
+`0`, `1`, etc. are section numbers defined as `id` number in `<DataRecord id>` from [libmbus xml output](#libmbus-xml-output).\
 You must identify which section holds what information and based on that create a template.\
 Or you can just have generic sensors for everything.
+
+'custom-xxx' are custom sensor you can publish.\
+Every custom sensor JSON section name must be preceded with `custom-'. All section names must be unique.
+Since custom sensors does not have it's own DataRecord in libmbus xml output, value must be derived from other data.
+Common use case is creating dedicated sensors from data in Manufacturer Specific field value.
+
 
 If you need help, raise an [issue](https://github.com/nilvanis/libmbus2mqtt/issues) and paste there your libmbus xml output, and I'll try to add a new template for you.
   
@@ -252,5 +261,5 @@ Data sheet: https://se.itron.com/o/commerce-media/accounts/-1/attachments/380994
 Data sheet: https://api.apator.com/uploads/oferta/woda-i-cieplo/systemy/przewodowy/apt-mbus-na/apt-mbus-na-1-catalogue.pdf
 
 ### Kamstrup Multical 401
-![Kamstrup Multical 401](../assets/kamstrup-multical-401.jpg?raw-true)\
+<img src="../assets/kamstrup-multical-401.jpg?raw-true" width="550">
 Data Sheet: https://documentation.kamstrup.com/docs/MULTICAL_401/en-GB/Data_sheet/CONTF9A902FD213B4A1BB4F5122E640B3AB7/
