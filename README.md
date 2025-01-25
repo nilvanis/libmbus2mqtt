@@ -81,11 +81,20 @@ For matching, you can use any field from ```<SlaveInformation>``` [libmbus xml o
         name, icon, platform, etc...
     },
     <...>
+    "custom-xxx": {
+        name, icon, platform, etc...
+    }
 }
 ```
-```0```, ```1```, etc. are section numbers defined as ```id``` number in ```<DataRecord id>``` from [libmbus xml output](#libmbus-xml-output).\
+`0`, `1`, etc. are section numbers defined as `id` number in `<DataRecord id>` from [libmbus xml output](#libmbus-xml-output).\
 You must identify which section holds what information and based on that create a template.\
 Or you can just have generic sensors for everything.
+
+'custom-xxx' are custom sensor you can publish.\
+Every custom sensor JSON section name must be preceded with `custom-'. All section names must be unique.
+Since custom sensors does not have it's own DataRecord in libmbus xml output, value must be derived from other data.
+Common use case is creating dedicated sensors from data in Manufacturer Specific field value.
+
 
 If you need help, raise an [issue](https://github.com/nilvanis/libmbus2mqtt/issues) and paste there your libmbus xml output, and I'll try to add a new template for you.
   
