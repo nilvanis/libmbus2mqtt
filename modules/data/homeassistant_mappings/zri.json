@@ -1,0 +1,152 @@
+{
+    "0": {
+        "name": "Fabrication Number",
+        "icon": "mdi:numeric",
+        "platform": "sensor",
+        "value_template":"{{ value_json.fabrication_number }}",
+        "entity_category": "diagnostic"
+    },
+    "1": {
+        "name": "Time Point (Time & Date)",
+        "icon": "mdi:calendar-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.time_point_datetime }}",
+        "entity_category": "diagnostic"
+    },
+    "2": {
+        "name": "Volume",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume | float / 100 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "3": {
+        "name": "Volume: Flow",
+        "icon": "mdi:waves-arrow-right",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_flow | float / 100 }}",
+        "device_class": "volume_flow_rate",
+        "unit_of_measurement": "m³/h",
+        "state_class": "MEASUREMENT"
+    },
+    "4": {
+        "name": "Volume: Time Point 1",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_tp1 | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "5": {
+        "name": "Time Point 1 (Date)",
+        "icon": "mdi:calendar-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.time_point_1 }}",
+        "device_class": "date",
+        "entity_category": "diagnostic"
+    },
+    "6": {
+        "name": "Volume: Time Point 2",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_tp2 | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "7": {
+        "name": "Time Point 2 (Date)",
+        "icon": "mdi:calendar-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.time_point_2 }}",
+        "device_class": "date",
+        "entity_category": "diagnostic"
+    },
+    "8": {
+        "name": "Volume: Time Point 3",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_tp3 | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "9": {
+        "name": "Time Point 3 (Date)",
+        "icon": "mdi:calendar-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.time_point_3 }}",
+        "device_class": "date",
+        "entity_category": "diagnostic"
+    },
+    "10": {
+        "name": "Volume: Time Point 4",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_tp4 | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "TOTAL_INCREASING"
+    },
+    "11": {
+        "name": "Time Point 4 (Date)",
+        "icon": "mdi:calendar-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.time_point_4 }}",
+        "device_class": "date",
+        "entity_category": "diagnostic"
+    },
+    "12": {
+        "name": "Volume: Flow",
+        "icon": "mdi:waves-arrow-right",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_flow | float / 100 }}",
+        "device_class": "volume_flow_rate",
+        "unit_of_measurement": "m³/h",
+        "state_class": "MEASUREMENT"
+    },
+    "13": {
+        "name": "On Time",
+        "icon": "mdi:battery-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.on_time }}",
+        "device_class": "duration",
+        "unit_of_measurement": "h",
+        "entity_category": "diagnostic"
+    },
+    "14": {
+        "name": "Operating Time",
+        "icon": "mdi:battery-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.operating_time }}",
+        "device_class": "duration",
+        "unit_of_measurement": "h",
+        "entity_category": "diagnostic"
+    },
+    "15": {
+        "name": "On Time (during error state)",
+        "icon": "mdi:battery-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.on_time_during_error }}",
+        "device_class": "duration",
+        "unit_of_measurement": "h",
+        "entity_category": "diagnostic"
+    },
+    "16": {
+        "name": "Error Flags",
+        "icon": "mdi:alert-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.error_flags }}",
+        "entity_category": "diagnostic"
+    },
+    "17": {
+        "name": "More records follow",
+        "icon": "mdi:card-text-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.more_records_follow }}",
+        "entity_category": "sensor"
+    }
+}
