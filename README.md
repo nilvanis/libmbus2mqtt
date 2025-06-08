@@ -265,7 +265,7 @@ Data sheet: https://api.apator.com/uploads/oferta/woda-i-cieplo/systemy/przewodo
 Data Sheet: https://documentation.kamstrup.com/docs/MULTICAL_401/en-GB/Data_sheet/CONTF9A902FD213B4A1BB4F5122E640B3AB7/
 
 ### B METERS FRM-MB1
-<img src="../assets/bmeters-rfm-mb1.jpg?raw-true" width="550">
+<img src="../assets/bmeters-rfm-bm1.jpg?raw-true" width="550">
 Data Sheet: https://www.bmeters.com/wp-content/uploads/2023/07/RFM-MB1_v3.2.pdf
 
 ### ZENNER EDC Communication Module with M-Bus and Pulse Output
