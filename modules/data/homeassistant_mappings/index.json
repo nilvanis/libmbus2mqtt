@@ -11,6 +11,9 @@
     "kamstrup_multical_401.json": {
         "Manufacturer": "KAM",
         "ProductName": "Kamstrup 382 (6850-005)"
+    },
+    "zri.json": {
+        "Manufacturer": "ZRI",
+        "ProductName": null
     }
 }
-
