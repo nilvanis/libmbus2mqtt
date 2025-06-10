@@ -99,7 +99,6 @@ while True:
             if HA_AUTODISCOVERY:
                 if not mqtt.ha_registered:
                     mqtt.ha_register(cfg.homeassistant)
-                    time.sleep(2)
                 if mqtt.ha_republish:
                     for dev in devices:
                         dev.homeassistant_discovery_published = False
@@ -112,6 +111,7 @@ while True:
                         ha_config=cfg.homeassistant,
                         L2M_VERSION=VERSION
                         )
+                    time.sleep(1)  # wait between registration and data publish
                     if register_msg_info != None:
                         register_msg_info.wait_for_publish(10)
                         if register_msg_info.is_published() == True:
