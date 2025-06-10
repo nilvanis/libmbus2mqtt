@@ -156,6 +156,7 @@ class Client:
                 Userdata: {userdata}
                 Reason code: {reason_code}
                 Properties: {properties}''')
+        self.ha_republish = True
         
     def _on_subscribe(self, client: mqtt.Client, userdata, mid, reason_code_list, properties):
         log.debug(f"Topic subscription successful.")
