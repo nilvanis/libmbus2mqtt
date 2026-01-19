@@ -125,7 +125,7 @@ homeassistant:
 ```
 
 Save and exit (Ctrl+O, Ctrl+X).
->![NOTE]
+> [!NOTE]
 > Full config options are described [here](#configuration).
 
 ### Step 4: Start the container
