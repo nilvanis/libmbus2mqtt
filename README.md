@@ -125,7 +125,7 @@ homeassistant:
 ```
 
 Save and exit (Ctrl+O, Ctrl+X).
->![INFO]
+>![NOTE]
 > Full config options are described [here](#configuration).
 
 ### Step 4: Start the container
@@ -415,7 +415,7 @@ libmbus2mqtt creates a "Bridge" device in Home Assistant with these entities:
 | Poll Interval | Number | Change polling interval (10-3600 seconds) |
 
 >[!IMPORTANT]
-> Settings changed via MQTT (e.g. `Log level`) are changed only for the current **runtime**, meaning it will revert to config.yml setting (or default of not set) after restart of libmbus2mqtt.
+> Settings changed via MQTT (e.g. `Log level`) are changed only for the current **runtime**, meaning it will revert to config.yml setting (or default if not set) after restart of libmbus2mqtt.
 
 ### M-Bus Devices
 
