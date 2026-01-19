@@ -1,0 +1,36 @@
+[Unit]
+Description=libmbus2mqtt - M-Bus to MQTT Bridge
+Documentation=https://github.com/nilvanis/libmbus2mqtt
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=libmbus2mqtt
+Group=dialout
+
+# Configuration file location
+Environment=LIBMBUS2MQTT_CONFIG=/etc/libmbus2mqtt/config.yaml
+
+# Working directory
+WorkingDirectory=/var/lib/libmbus2mqtt
+
+# Main command
+ExecStart=/usr/local/bin/libmbus2mqtt run
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/libmbus2mqtt
+
+# Allow access to serial devices
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target
