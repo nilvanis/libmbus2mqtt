@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<MBusData>
+
+    <SlaveInformation>
+        <Id>67434</Id>
+        <Manufacturer>APA</Manufacturer>
+        <Version>3</Version>
+        <ProductName></ProductName>
+        <Medium>Water</Medium>
+        <AccessNumber>51</AccessNumber>
+        <Status>20</Status>
+        <Signature>0000</Signature>
+    </SlaveInformation>
+
+    <DataRecord id="0">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>0</StorageNumber>
+        <Unit>Fabrication number</Unit>
+        <Value>345678</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="1">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>0</StorageNumber>
+        <Unit>Time Point (time &amp; date)</Unit>
+        <Value>2026-01-18T22:44:00</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="2">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>0</StorageNumber>
+        <Unit>Volume (m m^3)</Unit>
+        <Value>33803</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="3">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>0</StorageNumber>
+        <Unit>Volume flow (m m^3/h)</Unit>
+        <Value>0</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="4">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>1</StorageNumber>
+        <Unit>Volume (m m^3)</Unit>
+        <Value>33803</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="5">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>1</StorageNumber>
+        <Unit>Time Point (date)</Unit>
+        <Value>2026-01-01</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="6">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>0</StorageNumber>
+        <Unit>Operating time (days)</Unit>
+        <Value>3481</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="7">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>0</StorageNumber>
+        <Unit>Error flags</Unit>
+        <Value>128</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="8">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>0</StorageNumber>
+        <Unit>Manufacturer specific</Unit>
+        <Value>33620996</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="9">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>0</StorageNumber>
+        <Unit>Manufacturer specific</Unit>
+        <Value>22168</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="10">
+        <Function>Instantaneous value</Function>
+        <StorageNumber>0</StorageNumber>
+        <Unit>Manufacturer specific</Unit>
+        <Value>-4456411</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+    <DataRecord id="11">
+        <Function>Manufacturer specific</Function>
+        <Value>00 01 02 02 00 FF 1B 2B 00 00</Value>
+        <Timestamp>2026-01-18T20:39:28Z</Timestamp>
+    </DataRecord>
+
+</MBusData>

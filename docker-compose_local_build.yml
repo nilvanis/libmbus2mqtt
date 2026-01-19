@@ -1,0 +1,20 @@
+services:
+  libmbus2mqtt:
+    build: .
+    container_name: libmbus2mqtt
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    devices:
+      # M-Bus serial device - adjust path as needed
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    environment:
+      # Override config values via environment variables
+      # LIBMBUS2MQTT_MBUS_DEVICE: /dev/ttyUSB0
+      # LIBMBUS2MQTT_MQTT_HOST: 192.168.1.100
+      # LIBMBUS2MQTT_MQTT_USERNAME: user
+      # LIBMBUS2MQTT_MQTT_PASSWORD: password
+      # LIBMBUS2MQTT_HOMEASSISTANT_ENABLED: "true"
+      TZ: ${TZ:-Europe/London}
+    # Optional: connect to MQTT broker on host network
+    # network_mode: host

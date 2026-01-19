@@ -1,0 +1,168 @@
+<MBusData>
+
+<SlaveInformation>
+    <Id>12995211</Id>
+    <Manufacturer>ZRI</Manufacturer>
+    <Version>0</Version>
+    <ProductName></ProductName>
+    <Medium>Cold water</Medium>
+    <AccessNumber>85</AccessNumber>
+    <Status>00</Status>
+    <Signature>0000</Signature>
+</SlaveInformation>
+
+<DataRecord id="0">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>0</StorageNumber>
+    <Unit>Fabrication number</Unit>
+    <Value>123456789</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="1">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>0</StorageNumber>
+    <Unit>Time Point (time &amp; date)</Unit>
+    <Value>2025-05-17T12:35:00</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="2">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>0</StorageNumber>
+    <Unit>Volume (m m^3)</Unit>
+    <Value>769810</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="3">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>0</StorageNumber>
+    <Unit>Volume (1e-2  m^3)</Unit>
+    <Value>317</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="4">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>1</StorageNumber>
+    <Unit>Volume (m m^3)</Unit>
+    <Value>704538</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="5">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>1</StorageNumber>
+    <Unit>Time Point (date)</Unit>
+    <Value>2025-01-01</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="6">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>2</StorageNumber>
+    <Tariff>0</Tariff>
+    <Device>0</Device>
+    <Unit>Volume (m m^3)</Unit>
+    <Value>744005</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="7">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>2</StorageNumber>
+    <Tariff>0</Tariff>
+    <Device>0</Device>
+    <Unit>Time Point (date)</Unit>
+    <Value>2025-05-01</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="8">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>3</StorageNumber>
+    <Tariff>0</Tariff>
+    <Device>0</Device>
+    <Unit>Volume (m m^3)</Unit>
+    <Value>765914</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="9">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>3</StorageNumber>
+    <Tariff>0</Tariff>
+    <Device>0</Device>
+    <Unit>Time Point (date)</Unit>
+    <Value>2025-05-16</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="10">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>4</StorageNumber>
+    <Tariff>0</Tariff>
+    <Device>0</Device>
+    <Unit>Volume (m m^3)</Unit>
+    <Value>767523</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="11">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>4</StorageNumber>
+    <Tariff>0</Tariff>
+    <Device>0</Device>
+    <Unit>Time Point (date)</Unit>
+    <Value>2025-05-17</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="12">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>0</StorageNumber>
+    <Unit>Volume flow (m m^3/h)</Unit>
+    <Value>0</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="13">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>0</StorageNumber>
+    <Unit>On time (hours)</Unit>
+    <Value>32801</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="14">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>0</StorageNumber>
+    <Unit>Operating time (hours)</Unit>
+    <Value>27930</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="15">
+    <Function>Value during error state</Function>
+    <StorageNumber>0</StorageNumber>
+    <Unit>On time (hours)</Unit>
+    <Value>22273</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="16">
+    <Function>Instantaneous value</Function>
+    <StorageNumber>0</StorageNumber>
+    <Unit>Error flags</Unit>
+    <Value>1184</Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+<DataRecord id="17">
+    <Function>More records follow</Function>
+    <Value></Value>
+    <Timestamp>2025-05-17T12:26:25Z</Timestamp>
+</DataRecord>
+
+</MBusData>

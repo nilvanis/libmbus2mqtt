@@ -3,6 +3,10 @@ log/*
 !log/
 test/
 config.yaml
+_do_not_upload/
+
+#uv
+.python-version
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
