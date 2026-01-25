@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -103,3 +105,23 @@ class MbusData(BaseModel):
                 state[json_name] = self.get_record_value(component_id)
 
         return state
+
+    def to_generic_state(self) -> dict[str, dict[str, Any]]:
+        """
+        Convert all data records to a generic payload suitable for HA templates.
+
+        Returns:
+            Dictionary with a records map keyed by record id.
+        """
+        records: dict[str, dict[str, Any]] = {}
+
+        for record_id, record in self.data_records.items():
+            record_dict = record.model_dump(by_alias=False, exclude_none=False)
+
+            # Ensure value key exists for templating even if None
+            if "value" not in record_dict:
+                record_dict["value"] = None
+
+            records[record_id] = record_dict
+
+        return {"records": records}

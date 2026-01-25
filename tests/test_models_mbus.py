@@ -305,3 +305,32 @@ class TestMbusData:
         state = data.to_ha_state(template)
         # Value will be None since record doesn't exist
         assert state["missing"] is None
+
+    def test_to_generic_state_includes_all_records(
+        self,
+        sample_slave_info: SlaveInformation,
+        sample_data_records: dict[str, DataRecord],
+    ) -> None:
+        """Test to_generic_state returns records map with values."""
+        data = MbusData(
+            slave_information=sample_slave_info,
+            data_records=sample_data_records,
+        )
+
+        state = data.to_generic_state()
+        assert "records" in state
+        assert state["records"]["0"]["value"] == "987654"
+        assert state["records"]["1"]["value"] == "12345"
+
+    def test_to_generic_state_includes_none_values(
+        self,
+        sample_slave_info: SlaveInformation,
+    ) -> None:
+        """Test to_generic_state includes records with None value."""
+        records = {
+            "2": DataRecord(id="2", Function="Test", Unit="kWh", Value=None),
+        }
+        data = MbusData(slave_information=sample_slave_info, data_records=records)
+
+        state = data.to_generic_state()
+        assert state["records"]["2"]["value"] is None

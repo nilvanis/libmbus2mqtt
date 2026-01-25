@@ -10,6 +10,17 @@ import pytest
 
 from libmbus2mqtt.mbus.interface import SCAN_PATTERN, MbusInterface
 
+# Shared fixtures
+
+
+@pytest.fixture
+def mock_libmbus_path(tmp_path: Path) -> Path:
+    """Create mock libmbus binaries."""
+    for binary in ["mbus-serial-scan", "mbus-serial-request-data"]:
+        (tmp_path / binary).touch()
+    return tmp_path
+
+
 # ============================================================================
 # Scan Pattern Tests
 # ============================================================================
@@ -54,13 +65,6 @@ class TestScanPattern:
 
 class TestMbusInterfaceInit:
     """Tests for MbusInterface initialization."""
-
-    @pytest.fixture
-    def mock_libmbus_path(self, tmp_path: Path) -> Path:
-        """Create mock libmbus binaries."""
-        for binary in ["mbus-serial-scan", "mbus-serial-request-data"]:
-            (tmp_path / binary).touch()
-        return tmp_path
 
     def test_init_with_valid_binaries(self, mock_libmbus_path: Path) -> None:
         """Test initialization with valid binary path."""
@@ -139,6 +143,8 @@ class TestMbusInterfaceScan:
             device="/dev/ttyUSB0",
             baudrate=2400,
             libmbus_path=mock_libmbus_path,
+            retry_count=0,
+            retry_delay=0,
         )
 
     def test_scan_returns_discovered_devices(
@@ -250,6 +256,8 @@ class TestMbusInterfacePollRaw:
             device="/dev/ttyUSB0",
             baudrate=2400,
             libmbus_path=mock_libmbus_path,
+            retry_count=0,
+            retry_delay=0,
         )
 
     def test_poll_raw_returns_xml(
@@ -372,6 +380,8 @@ class TestMbusInterfacePoll:
             device="/dev/ttyUSB0",
             baudrate=2400,
             libmbus_path=mock_libmbus_path,
+            retry_count=0,
+            retry_delay=0,
         )
 
     def test_poll_returns_parsed_data(
@@ -466,3 +476,83 @@ class TestMbusInterfaceBinaryPath:
         # Should return just the binary name (assumes in PATH)
         path = interface._get_binary_path("mbus-serial-scan")
         assert path == "mbus-serial-scan"
+
+
+# ============================================================================
+# Retry Logic Tests
+# ============================================================================
+
+
+class TestMbusInterfaceRetries:
+    """Tests for retry handling in scan and poll."""
+
+    @pytest.fixture
+    def interface_with_retries(self, mock_libmbus_path: Path) -> MbusInterface:
+        """Create interface with retries enabled and no delay."""
+        return MbusInterface(
+            device="/dev/ttyUSB0",
+            baudrate=2400,
+            libmbus_path=mock_libmbus_path,
+            retry_count=2,
+            retry_delay=0,
+        )
+
+    def test_poll_raw_retries_and_succeeds(
+        self,
+        interface_with_retries: MbusInterface,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Poll should retry after a timeout and then succeed."""
+        responses = [
+            subprocess.TimeoutExpired(cmd="cmd", timeout=10),
+            MagicMock(stdout="xml-data", stderr="", returncode=0),
+        ]
+
+        def mock_run(*args: object, **kwargs: object) -> MagicMock:
+            response = responses.pop(0)
+            if isinstance(response, Exception):
+                raise response
+            return response
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        result = interface_with_retries.poll_raw(1, timeout=10)
+        assert result == "xml-data"
+
+    def test_poll_raw_exhausts_retries(
+        self,
+        interface_with_retries: MbusInterface,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Poll should return None after exhausting retries."""
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            MagicMock(side_effect=subprocess.CalledProcessError(1, "cmd")),
+        )
+
+        result = interface_with_retries.poll_raw(1, timeout=5)
+        assert result is None
+
+    def test_scan_retries_and_succeeds(
+        self,
+        interface_with_retries: MbusInterface,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Scan should retry on failure and succeed on a later attempt."""
+        attempts = [
+            MagicMock(stdout="", stderr="fail", returncode=1),
+            MagicMock(
+                stdout="Found a M-Bus device at address 3\nFound a M-Bus device at address 7",
+                stderr="",
+                returncode=0,
+            ),
+        ]
+
+        def mock_run(*args: object, **kwargs: object) -> MagicMock:
+            return attempts.pop(0)
+
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        devices = interface_with_retries.scan(timeout=5)
+        assert devices == [3, 7]
