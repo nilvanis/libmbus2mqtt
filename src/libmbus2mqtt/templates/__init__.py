@@ -14,7 +14,8 @@ logger = get_logger("templates")
 
 # Cache for loaded templates
 _template_cache: dict[str, dict[str, Any]] = {}
-_index_cache: dict[str, dict[str, str | None]] | None = None
+_user_index_cache: dict[str, dict[str, str | None]] | None = None
+_bundled_index_cache: dict[str, dict[str, str | None]] | None = None
 
 
 def _get_bundled_templates_path() -> Path:
@@ -22,31 +23,40 @@ def _get_bundled_templates_path() -> Path:
     return Path(resources.files("libmbus2mqtt") / "templates")  # type: ignore[arg-type]
 
 
-def _load_index() -> dict[str, dict[str, str | None]]:
-    """Load template index from bundled or user templates."""
-    global _index_cache
-    if _index_cache is not None:
-        return _index_cache
+def _load_index_file(path: Path) -> dict[str, dict[str, str | None]]:
+    """Load an index file from the given path."""
+    with path.open() as f:
+        return json.load(f)
 
-    # Try user templates first
+
+def _get_user_index() -> dict[str, dict[str, str | None]]:
+    """Load user template index (if present)."""
+    global _user_index_cache
+    if _user_index_cache is not None:
+        return _user_index_cache
+
     user_index = TEMPLATES_DIR / "index.json"
     if user_index.exists():
         logger.debug(f"Loading template index from {user_index}")
-        with user_index.open() as f:
-            _index_cache = json.load(f)
-            return _index_cache
+        _user_index_cache = _load_index_file(user_index)
+    else:
+        _user_index_cache = {}
+    return _user_index_cache
 
-    # Fall back to bundled templates
+
+def _get_bundled_index() -> dict[str, dict[str, str | None]]:
+    """Load bundled template index (if present)."""
+    global _bundled_index_cache
+    if _bundled_index_cache is not None:
+        return _bundled_index_cache
+
     bundled_index = _get_bundled_templates_path() / "index.json"
     if bundled_index.exists():
         logger.debug("Loading template index from bundled templates")
-        with bundled_index.open() as f:
-            _index_cache = json.load(f)
-            return _index_cache
-
-    logger.warning("No template index found")
-    _index_cache = {}
-    return _index_cache
+        _bundled_index_cache = _load_index_file(bundled_index)
+    else:
+        _bundled_index_cache = {}
+    return _bundled_index_cache
 
 
 def find_template(manufacturer: str, product_name: str | None) -> str | None:
@@ -60,15 +70,27 @@ def find_template(manufacturer: str, product_name: str | None) -> str | None:
     Returns:
         Template filename or None if no match
     """
-    index = _load_index()
-
-    for filename, match_criteria in index.items():
+    # Try user index first
+    user_index = _get_user_index()
+    for filename, match_criteria in user_index.items():
         if match_criteria.get("Manufacturer") != manufacturer:
             continue
 
         expected_product = match_criteria.get("ProductName")
         if expected_product is None or expected_product == product_name:
-            logger.debug(f"Matched template {filename} for {manufacturer}/{product_name}")
+            logger.debug(f"Matched user template {filename} for {manufacturer}/{product_name}")
+            return filename
+
+    # Fall back to bundled index
+    bundled_index = _get_bundled_index()
+
+    for filename, match_criteria in bundled_index.items():
+        if match_criteria.get("Manufacturer") != manufacturer:
+            continue
+
+        expected_product = match_criteria.get("ProductName")
+        if expected_product is None or expected_product == product_name:
+            logger.debug(f"Matched bundled template {filename} for {manufacturer}/{product_name}")
             return filename
 
     logger.warning(f"No template found for {manufacturer}/{product_name}")
@@ -133,6 +155,7 @@ def get_template_for_device(
 
 def clear_cache() -> None:
     """Clear template caches."""
-    global _template_cache, _index_cache
+    global _template_cache, _user_index_cache, _bundled_index_cache
     _template_cache = {}
-    _index_cache = None
+    _user_index_cache = None
+    _bundled_index_cache = None
