@@ -10,7 +10,7 @@ from typing import Annotated, Any
 from uuid import uuid4
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, FieldValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from libmbus2mqtt.constants import (
@@ -36,6 +36,7 @@ from libmbus2mqtt.constants import (
     POLLING_DEFAULT_INTERVAL,
     POLLING_DEFAULT_STARTUP_DELAY,
 )
+from libmbus2mqtt.mbus.utils import parse_mbus_device
 
 EnvPath = tuple[str, ...]
 
@@ -124,16 +125,36 @@ def _merge_env_with_config(config_dict: dict[str, Any]) -> dict[str, Any]:
 class MbusConfig(BaseModel):
     """M-Bus interface configuration."""
 
-    device: str = Field(..., description="Serial/TTY device path (required)")
+    device: str = Field(
+        ...,
+        description="Serial/TTY device path or IPv4:port (e.g. 192.168.1.10:9999)",
+    )
     baudrate: int = Field(default=MBUS_DEFAULT_BAUDRATE, description="Baud rate")
     timeout: int = Field(default=MBUS_DEFAULT_TIMEOUT, ge=1, description="Timeout in seconds")
     retry_count: int = Field(default=MBUS_DEFAULT_RETRY_COUNT, ge=0, description="Retry count")
     retry_delay: int = Field(default=MBUS_DEFAULT_RETRY_DELAY, ge=0, description="Retry delay")
     autoscan: bool = Field(default=True, description="Auto-scan for devices on startup")
 
+    @field_validator("device")
+    @classmethod
+    def validate_device(cls, v: str) -> str:
+        parse_mbus_device(v)  # raises on invalid IPv4:port
+        return v
+
     @field_validator("baudrate")
     @classmethod
-    def validate_baudrate(cls, v: int) -> int:
+    def validate_baudrate(cls, v: int, info: FieldValidationInfo) -> int:  # type: ignore[override]
+        # Baudrate is ignored for TCP endpoints; keep strict list for serial.
+        device = info.data.get("device") if hasattr(info, "data") else None
+        if device is not None:
+            try:
+                endpoint = parse_mbus_device(device)
+                if endpoint.type == "tcp":
+                    return v
+            except Exception:
+                # If device is invalid, let device validator handle the error.
+                pass
+
         if v not in MBUS_BAUDRATES:
             raise ValueError(f"Baudrate must be one of {MBUS_BAUDRATES}")
         return v
@@ -325,8 +346,8 @@ def generate_example_config() -> str:
 
 # M-Bus Interface (required: device)
 mbus:
-  device: /dev/ttyUSB0          # Serial/TTY device path
-  # baudrate: 2400              # Options: 300, 2400, 9600
+  device: /dev/ttyUSB0          # Serial/TTY device path OR IPv4:port (e.g. 192.168.1.50:9999)
+  # baudrate: 2400              # Options: 300, 2400, 9600 (ignored for TCP)
   # timeout: 5                  # Seconds
   # retry_count: 3
   # retry_delay: 1              # Seconds

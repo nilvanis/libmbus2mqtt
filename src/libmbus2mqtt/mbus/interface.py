@@ -9,12 +9,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from libmbus2mqtt.constants import (
-    LIBMBUS_BINARIES,
     LIBMBUS_DEFAULT_INSTALL_PATH,
+    LIBMBUS_SERIAL_BINARIES,
+    LIBMBUS_TCP_BINARIES,
     MBUS_DEFAULT_RETRY_COUNT,
     MBUS_DEFAULT_RETRY_DELAY,
 )
 from libmbus2mqtt.logging import get_logger
+from libmbus2mqtt.mbus.utils import MbusEndpoint, parse_mbus_device
 
 if TYPE_CHECKING:
     from libmbus2mqtt.models.mbus import MbusData
@@ -36,6 +38,7 @@ class MbusInterface:
         retry_count: int = MBUS_DEFAULT_RETRY_COUNT,
         retry_delay: int = MBUS_DEFAULT_RETRY_DELAY,
     ) -> None:
+        self.endpoint: MbusEndpoint = parse_mbus_device(device)
         self.device = device
         self.baudrate = baudrate
         self.libmbus_path = Path(libmbus_path)
@@ -44,8 +47,12 @@ class MbusInterface:
         self._validate_libmbus()
 
     def _validate_libmbus(self) -> None:
-        """Check if libmbus binaries are available."""
-        for binary in LIBMBUS_BINARIES:
+        """Check if required libmbus binaries are available for the endpoint type."""
+        binaries = (
+            LIBMBUS_TCP_BINARIES if self.endpoint.type == "tcp" else LIBMBUS_SERIAL_BINARIES
+        )
+
+        for binary in binaries:
             binary_path = self.libmbus_path / binary
             if not binary_path.exists():
                 # Try in PATH
@@ -68,6 +75,15 @@ class MbusInterface:
             return str(binary_path)
         return binary  # Assume it's in PATH
 
+    def _build_scan_cmd(self) -> list[str]:
+        """Build the command list for scanning based on endpoint type."""
+        if self.endpoint.type == "tcp":
+            binary = self._get_binary_path("mbus-tcp-scan")
+            return [binary, self.endpoint.host or "", str(self.endpoint.port or "")]
+
+        binary = self._get_binary_path("mbus-serial-scan")
+        return [binary, "-b", str(self.baudrate), self.device]
+
     def scan(self, timeout: int = 60) -> list[int]:
         """
         Scan for M-Bus devices.
@@ -75,10 +91,9 @@ class MbusInterface:
         Returns:
             List of discovered device IDs.
         """
-        logger.info(f"Scanning for M-Bus devices on {self.device}...")
+        logger.info(f"Scanning for M-Bus devices on {self.device} ({self.endpoint.type})...")
 
-        binary = self._get_binary_path("mbus-serial-scan")
-        cmd = [binary, "-b", str(self.baudrate), self.device]
+        cmd = self._build_scan_cmd()
 
         last_error: Exception | None = None
 
@@ -135,6 +150,15 @@ class MbusInterface:
         logger.error("Scan failed after %s attempt(s): %s", self.retry_count + 1, last_error)
         return []
 
+    def _build_poll_cmd(self, device_id: int) -> list[str]:
+        """Build the command list for polling based on endpoint type."""
+        if self.endpoint.type == "tcp":
+            binary = self._get_binary_path("mbus-tcp-request-data")
+            return [binary, self.endpoint.host or "", str(self.endpoint.port or ""), str(device_id)]
+
+        binary = self._get_binary_path("mbus-serial-request-data")
+        return [binary, "-b", str(self.baudrate), self.device, str(device_id)]
+
     def poll_raw(self, device_id: int, timeout: int = 10) -> str | None:
         """
         Poll a device for raw XML data.
@@ -151,8 +175,7 @@ class MbusInterface:
         if device_id == 0:
             logger.warning("Polling device ID 0 (default M-Bus address)")
 
-        binary = self._get_binary_path("mbus-serial-request-data")
-        cmd = [binary, "-b", str(self.baudrate), self.device, str(device_id)]
+        cmd = self._build_poll_cmd(device_id)
 
         last_error: Exception | None = None
 

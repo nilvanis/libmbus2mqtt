@@ -101,6 +101,18 @@ class Daemon:
             retry_count=self.config.mbus.retry_count,
             retry_delay=self.config.mbus.retry_delay,
         )
+        if self._mbus.endpoint.type == "tcp":
+            logger.info(
+                "M-Bus endpoint: TCP %s:%s (baudrate ignored)",
+                self._mbus.endpoint.host,
+                self._mbus.endpoint.port,
+            )
+        else:
+            logger.info(
+                "M-Bus endpoint: serial %s @ %s baud",
+                self._mbus.device,
+                self._mbus.baudrate,
+            )
 
     def _init_mqtt(self) -> None:
         """Initialize MQTT client and related components."""

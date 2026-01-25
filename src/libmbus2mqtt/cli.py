@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from libmbus2mqtt.constants import APP_NAME, APP_VERSION, DEFAULT_CONFIG_FILE
+from libmbus2mqtt.mbus.utils import check_tcp_connectivity, parse_mbus_device
 
 app = typer.Typer(
     name=APP_NAME,
@@ -181,40 +182,48 @@ def device_info(
         console.print(f"[red]Error loading configuration:[/red] {e}")
         raise typer.Exit(1) from None
 
-    device_path = app_config.mbus.device
-    baudrate = app_config.mbus.baudrate
-    info = check_tty_device(device_path)
-
+    endpoint = parse_mbus_device(app_config.mbus.device)
     console.print("\n[bold]M-Bus Master Device Info[/bold]")
     console.print("=" * 30)
-    console.print(f"Device:     {device_path}")
+    console.print(f"Device:     {app_config.mbus.device}")
 
-    if info["exists"]:
-        if info["readable"] and info["writable"]:
-            status = "[green]Available[/green]"
+    if endpoint.type == "serial":
+        baudrate = app_config.mbus.baudrate
+        info = check_tty_device(app_config.mbus.device)
+
+        if info["exists"]:
+            if info["readable"] and info["writable"]:
+                status = "[green]Available[/green]"
+            else:
+                status = "[yellow]Limited access[/yellow]"
         else:
-            status = "[yellow]Limited access[/yellow]"
+            status = "[red]Not found[/red]"
+
+        console.print(f"Status:     {status}")
+
+        if info["exists"]:
+            console.print(f"Type:       {info['type']}")
+
+            if info.get("driver"):
+                console.print(f"Driver:     {info['driver']}")
+
+            usb_info = info.get("usb_info")
+            if usb_info:
+                console.print(f"USB Vendor: {usb_info.get('vendor', 'Unknown')}")
+                if usb_info.get("product"):
+                    console.print(f"USB Product: {usb_info['product']}")
+
+            if info.get("is_busy"):
+                console.print("[yellow]Warning:    Device may be in use by another process[/yellow]")
+
+        console.print(f"Baudrate:   {baudrate} (configured)")
     else:
-        status = "[red]Not found[/red]"
+        reachable = check_tcp_connectivity(endpoint.host or "", int(endpoint.port or 0))
+        status = "[green]OK[/green]" if reachable else "[red]UNAVAILABLE[/red]"
+        console.print(f"Endpoint:   {endpoint.host}:{endpoint.port}")
+        console.print(f"Status:     {status}")
+        console.print("Baudrate:   n/a (TCP)")
 
-    console.print(f"Status:     {status}")
-
-    if info["exists"]:
-        console.print(f"Type:       {info['type']}")
-
-        if info.get("driver"):
-            console.print(f"Driver:     {info['driver']}")
-
-        usb_info = info.get("usb_info")
-        if usb_info:
-            console.print(f"USB Vendor: {usb_info.get('vendor', 'Unknown')}")
-            if usb_info.get("product"):
-                console.print(f"USB Product: {usb_info['product']}")
-
-        if info.get("is_busy"):
-            console.print("[yellow]Warning:    Device may be in use by another process[/yellow]")
-
-    console.print(f"Baudrate:   {baudrate} (configured)")
     console.print()
 
 

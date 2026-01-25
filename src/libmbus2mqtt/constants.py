@@ -47,7 +47,9 @@ AVAILABILITY_DEFAULT_TIMEOUT_POLLS = 3
 
 # Libmbus
 LIBMBUS_REPO = "https://github.com/rscada/libmbus.git"
-LIBMBUS_BINARIES = ["mbus-serial-scan", "mbus-serial-request-data"]
+LIBMBUS_SERIAL_BINARIES = ["mbus-serial-scan", "mbus-serial-request-data"]
+LIBMBUS_TCP_BINARIES = ["mbus-tcp-scan", "mbus-tcp-request-data"]
+LIBMBUS_BINARIES = LIBMBUS_SERIAL_BINARIES + LIBMBUS_TCP_BINARIES
 LIBMBUS_DEFAULT_INSTALL_PATH = Path("/usr/local/bin")
 LIBMBUS_BUILD_DIR = Path("/tmp/libmbus-build")
 
