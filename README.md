@@ -12,6 +12,7 @@ Read your wired M-Bus meters (water, heat, gas, electricity) and send the data t
 ## Features
 
 - Reading M-Bus devices via 'TTL to M-Bus' converter or 'USB to M-Bus adapter'
+- Reading via TCP-connected M-Bus master (IPv4:port)
 - Automatic discovery of connected M-Bus meters
 - Publishing meter data to MQTT
 - Home Assistant MQTT Discovery integration:
@@ -113,7 +114,7 @@ Paste the following content and edit to match your setup:
 
 ```yaml
 mbus:
-  device: /dev/ttyUSB0          # Your M-Bus adapter device
+  device: /dev/ttyUSB0          # Your M-Bus adapter device (or IPv4:port for TCP masters)
 
 mqtt:
   host: 192.168.1.100           # Your MQTT broker IP address
@@ -248,11 +249,10 @@ mqtt:
 ```yaml
 # M-Bus Interface
 mbus:
-  device: /dev/ttyUSB0          # REQUIRED - Your M-Bus adapter device
-                                # USB: /dev/ttyUSB0, /dev/ttyACM0
-                                # Raspberry Pi UART: /dev/ttyAMA0, /dev/serial0
-                                # Serial over Ethernet: /dev/pts/X
-  baudrate: 2400                # M-Bus baudrate (300, 2400, or 9600)
+  device: /dev/ttyUSB0          # REQUIRED - Serial device path OR IPv4:port (TCP master)
+                                # Serial examples: /dev/ttyUSB0, /dev/ttyACM0, /dev/ttyAMA0
+                                # TCP example: 192.168.1.50:9999 (IPv4 only, no hostnames)
+  baudrate: 2400                # M-Bus baudrate (300, 2400, or 9600) - ignored for TCP
   timeout: 5                    # Seconds to wait for device response
   retry_count: 3                # Number of retries on failure
   retry_delay: 1                # Seconds between retries

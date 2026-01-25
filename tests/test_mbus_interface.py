@@ -479,6 +479,66 @@ class TestMbusInterfaceBinaryPath:
 
 
 # ============================================================================
+# TCP Endpoint Tests
+# ============================================================================
+
+
+class TestMbusInterfaceTcp:
+    """Tests for TCP mode command construction and validation."""
+
+    @pytest.fixture
+    def mock_tcp_libmbus_path(self, tmp_path: Path) -> Path:
+        """Create mock libmbus TCP binaries."""
+        for binary in ["mbus-tcp-scan", "mbus-tcp-request-data"]:
+            (tmp_path / binary).touch()
+        return tmp_path
+
+    @pytest.fixture
+    def tcp_interface(self, mock_tcp_libmbus_path: Path) -> MbusInterface:
+        """Create interface in TCP mode."""
+        return MbusInterface(
+            device="192.168.1.10:10001",
+            baudrate=2400,  # ignored for TCP
+            libmbus_path=mock_tcp_libmbus_path,
+            retry_count=0,
+            retry_delay=0,
+        )
+
+    def test_scan_uses_tcp_binary_and_host_port(
+        self, tcp_interface: MbusInterface, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """TCP scan should call mbus-tcp-scan host port."""
+        mock_run = MagicMock()
+        mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        tcp_interface.scan(timeout=5)
+
+        call_args = mock_run.call_args
+        cmd = call_args[0][0]
+        assert "mbus-tcp-scan" in cmd[0]
+        assert "192.168.1.10" in cmd
+        assert "10001" in cmd
+
+    def test_poll_raw_uses_tcp_binary_and_host_port(
+        self, tcp_interface: MbusInterface, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """TCP poll_raw should call mbus-tcp-request-data host port id."""
+        mock_run = MagicMock()
+        mock_run.return_value = MagicMock(stdout="<xml/>", stderr="", returncode=0)
+        monkeypatch.setattr(subprocess, "run", mock_run)
+
+        tcp_interface.poll_raw(3, timeout=4)
+
+        call_args = mock_run.call_args
+        cmd = call_args[0][0]
+        assert "mbus-tcp-request-data" in cmd[0]
+        assert "192.168.1.10" in cmd
+        assert "10001" in cmd
+        assert "3" in cmd
+
+
+# ============================================================================
 # Retry Logic Tests
 # ============================================================================
 

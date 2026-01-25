@@ -60,6 +60,27 @@ class TestMbusConfig:
         with pytest.raises(ValidationError, match="Baudrate must be one of"):
             MbusConfig(device="/dev/ttyUSB0", baudrate=19200)
 
+    def test_tcp_device_allows_any_baudrate(self) -> None:
+        """Baudrate is ignored for TCP endpoints."""
+        config = MbusConfig(device="192.168.1.10:10001", baudrate=19200)
+        assert config.device == "192.168.1.10:10001"
+        assert config.baudrate == 19200
+
+    def test_tcp_device_must_be_valid_ipv4(self) -> None:
+        """Invalid IPv4 address raises ValueError."""
+        with pytest.raises(ValidationError):
+            MbusConfig(device="999.1.1.1:1000")
+
+    def test_tcp_device_port_range(self) -> None:
+        """Port must be within valid range."""
+        with pytest.raises(ValidationError):
+            MbusConfig(device="192.168.1.10:70000")
+
+    def test_tcp_device_hostname_not_allowed(self) -> None:
+        """Hostnames are not supported for TCP mode."""
+        with pytest.raises(ValidationError):
+            MbusConfig(device="example.com:1000")
+
     def test_timeout_must_be_ge_1(self) -> None:
         """Test timeout must be >= 1."""
         with pytest.raises(ValidationError):
