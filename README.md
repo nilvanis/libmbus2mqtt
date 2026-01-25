@@ -508,6 +508,11 @@ The numbers (`"0"`, `"1"`, etc.) correspond to `<DataRecord id="X">` in the M-Bu
 Since custom sensors does not have it's own DataRecord in libmbus xml output, value must be derived from other data.
 Common use case is creating dedicated sensors from data in Manufacturer Specific field value.
 
+Template lookup order:
+- libmbus2mqtt first checks `/data/templates/index.json` for a matching entry and template file.
+- If no match is found in the user index, it falls back to the bundled index/templates.
+This lets you add templates without blocking built-in ones; if you want to override a built-in, add a matching entry to your user index and provide the file in `/data/templates/`.
+
 ### Getting Your Device's Data Records
 
 To see what data your meter provides, run:

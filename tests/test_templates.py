@@ -212,7 +212,7 @@ class TestUserTemplates:
         user_templates_dir: Path,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Test user index.json overrides bundled index."""
+        """Test user index.json is checked first, bundled used as fallback."""
         # Create user index with custom manufacturer
         user_index = {
             "custom_device.json": {
@@ -235,9 +235,37 @@ class TestUserTemplates:
         filename = find_template("XYZ", None)
         assert filename == "custom_device.json"
 
-        # Should NOT find bundled manufacturers (user index replaces bundled)
+        # Should still find bundled manufacturers when user index has no match
         filename = find_template("ACW", "Itron CYBLE M-Bus 1.4")
-        assert filename is None
+        assert filename == "itron_cyble_1_4.json"
+
+    def test_user_index_partial_fallback_to_bundled(
+        self,
+        user_templates_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """User index with limited entries should still allow bundled matches."""
+        user_index = {
+            "custom_device.json": {
+                "Manufacturer": "ZZZ",
+                "ProductName": "OnlyOne",
+            }
+        }
+        (user_templates_dir / "index.json").write_text(json.dumps(user_index))
+        (user_templates_dir / "custom_device.json").write_text(
+            json.dumps({"0": {"name": "Only One", "value_template": "{{ value_json.a }}"}})
+        )
+
+        monkeypatch.setattr(templates, "TEMPLATES_DIR", user_templates_dir)
+        clear_cache()
+
+        # User match still works
+        filename = find_template("ZZZ", "OnlyOne")
+        assert filename == "custom_device.json"
+
+        # Bundled match still works when user index has no entry
+        filename = find_template("KAM", "Kamstrup 382 (6850-005)")
+        assert filename == "kamstrup_multical_401.json"
 
     def test_fallback_to_bundled_when_no_user_template(
         self,
@@ -446,7 +474,8 @@ class TestUserIndexErrors:
         clear_cache()
 
         filename = find_template("ACW", "Itron CYBLE M-Bus 1.4")
-        assert filename is None
+        # Empty user index should fall back to bundled index
+        assert filename == "itron_cyble_1_4.json"
 
 
 # ============================================================================
