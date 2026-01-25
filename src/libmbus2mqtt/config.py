@@ -10,7 +10,7 @@ from typing import Annotated, Any
 from uuid import uuid4
 
 import yaml
-from pydantic import BaseModel, Field, FieldValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from libmbus2mqtt.constants import (
@@ -141,23 +141,13 @@ class MbusConfig(BaseModel):
         parse_mbus_device(v)  # raises on invalid IPv4:port
         return v
 
-    @field_validator("baudrate")
-    @classmethod
-    def validate_baudrate(cls, v: int, info: FieldValidationInfo) -> int:  # type: ignore[override]
-        # Baudrate is ignored for TCP endpoints; keep strict list for serial.
-        device = info.data.get("device") if hasattr(info, "data") else None
-        if device is not None:
-            try:
-                endpoint = parse_mbus_device(device)
-                if endpoint.type == "tcp":
-                    return v
-            except Exception:
-                # If device is invalid, let device validator handle the error.
-                pass
-
-        if v not in MBUS_BAUDRATES:
+    @model_validator(mode="after")
+    def validate_serial_fields(self) -> MbusConfig:
+        """Ensure serial-only constraints when endpoint is serial."""
+        endpoint = parse_mbus_device(self.device)
+        if endpoint.type == "serial" and self.baudrate not in MBUS_BAUDRATES:
             raise ValueError(f"Baudrate must be one of {MBUS_BAUDRATES}")
-        return v
+        return self
 
 
 class MqttConfig(BaseModel):

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import re
+import socket
 from dataclasses import dataclass
 from typing import Literal
-import socket
-
 
 EndpointType = Literal["serial", "tcp"]
 
