@@ -303,7 +303,7 @@ logs:
 
 ### Environment Variables
 
-All configuration options can be overridden using environment variables. This is especially useful with Docker.
+Environment variables can be used to provide config values (handy in Docker). When both the YAML file and an environment variable set the same field, the YAML value is used and a warning is logged.
 
 | ENV VAR | DEFAULT |
 | --- | --- |
@@ -322,14 +322,14 @@ All configuration options can be overridden using environment variables. This is
 | LIBMBUS2MQTT_MQTT_QOS | 1 |
 | LIBMBUS2MQTT_MQTT_BASE_TOPIC | libmbus2mqtt |
 | LIBMBUS2MQTT_HOMEASSISTANT_ENABLED | true |
-| LIBMBUS2MQTT_HOMEASSISTANT_DISCOVER_PREFIX | homeassistant |
+| LIBMBUS2MQTT_HOMEASSISTANT_DISCOVERY_PREFIX | homeassistant |
 | LIBMBUS2MQTT_POLLING_INTERVAL | 120 |
 | LIBMBUS2MQTT_POLLING_STARTUP_DELAY | 5 |
 | LIBMBUS2MQTT_AVAILABILITY_TIMEOUT_POLLS | 3 |
 | LIBMBUS2MQTT_LOGS_LEVEL | INFO |
 | LIBMBUS2MQTT_LOGS_SAVE_TO_FILE | false |
 | LIBMBUS2MQTT_LOGS_FILE | data/log/libmbus2mqtt.log |
-| LIBMBUS2MQTT_LOGS_MAX_SIZE_TO_MB | 10 |
+| LIBMBUS2MQTT_LOGS_MAX_SIZE_MB | 10 |
 | LIBMBUS2MQTT_LOGS_BACKUP_COUNT | 5 |
 
 Docker Compose example with environment variables:
