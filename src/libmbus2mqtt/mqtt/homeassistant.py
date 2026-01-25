@@ -206,11 +206,10 @@ class HomeAssistantDiscovery:
         base = self.base_topic
         device_id = device.object_id
 
-        # State topic for this device
+        # State/availability topics for this device
         state_topic = TOPIC_DEVICE_STATE.format(base=base, device_id=device_id)
-        availability_topic = TOPIC_DEVICE_AVAILABILITY.format(
-            base=base, device_id=device_id
-        )
+        availability_topic = TOPIC_DEVICE_AVAILABILITY.format(base=base, device_id=device_id)
+        availability_list = self._build_device_availability_list(availability_topic)
 
         # Try to load a template for this device
         template = None
@@ -227,7 +226,7 @@ class HomeAssistantDiscovery:
                 device_info=device_info,
                 template=template,
                 state_topic=state_topic,
-                availability_topic=availability_topic,
+                availability=availability_list,
             )
         else:
             # Publish generic entities based on data records
@@ -235,7 +234,7 @@ class HomeAssistantDiscovery:
                 device=device,
                 device_info=device_info,
                 state_topic=state_topic,
-                availability_topic=availability_topic,
+                availability=availability_list,
             )
 
         device.ha_discovery_published = True
@@ -246,7 +245,7 @@ class HomeAssistantDiscovery:
         device_info: dict[str, Any],
         template: dict[str, dict[str, str]],
         state_topic: str,
-        availability_topic: str,
+        availability: list[dict[str, str]],
     ) -> None:
         """Publish entities defined in a device template."""
         for entity_id, entity_config in template.items():
@@ -258,7 +257,7 @@ class HomeAssistantDiscovery:
                 "unique_id": object_id,
                 "device": device_info,
                 "state_topic": state_topic,
-                "availability_topic": availability_topic,
+                "availability": availability,
             }
 
             # Add value template if specified
@@ -288,7 +287,7 @@ class HomeAssistantDiscovery:
         device: Device,
         device_info: dict[str, Any],
         state_topic: str,
-        availability_topic: str,
+        availability: list[dict[str, str]],
     ) -> None:
         """Publish generic entities based on M-Bus data records."""
         if not device.mbus_data:
@@ -309,7 +308,7 @@ class HomeAssistantDiscovery:
                 "device": device_info,
                 "state_topic": state_topic,
                 "value_template": f"{{{{ value_json.records['{record_key}'].value }}}}",
-                "availability_topic": availability_topic,
+                "availability": availability,
             }
 
             if record.unit:
@@ -351,6 +350,21 @@ class HomeAssistantDiscovery:
 
         return None
 
+    def _build_device_availability_list(self, device_availability_topic: str) -> list[dict[str, str]]:
+        """Build HA availability list combining bridge and device availability topics."""
+        return [
+            {
+                "topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
+                "payload_available": "online",
+                "payload_not_available": "offline",
+            },
+            {
+                "topic": device_availability_topic,
+                "payload_available": "online",
+                "payload_not_available": "offline",
+            },
+        ]
+
     def _publish_sensor(
         self,
         object_id: str,
@@ -372,7 +386,13 @@ class HomeAssistantDiscovery:
             "device": device,
             "state_topic": state_topic,
             "value_template": value_template,
-            "availability_topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
+            "availability": [
+                {
+                    "topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
+                }
+            ],
         }
 
         if icon:
@@ -411,7 +431,13 @@ class HomeAssistantDiscovery:
             "unique_id": object_id,
             "device": device,
             "command_topic": command_topic,
-            "availability_topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
+            "availability": [
+                {
+                    "topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
+                }
+            ],
         }
 
         if icon:
@@ -448,7 +474,13 @@ class HomeAssistantDiscovery:
             "state_topic": state_topic,
             "value_template": value_template,
             "options": options,
-            "availability_topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
+            "availability": [
+                {
+                    "topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
+                }
+            ],
         }
 
         if icon:
@@ -490,7 +522,13 @@ class HomeAssistantDiscovery:
             "min": min_value,
             "max": max_value,
             "step": step,
-            "availability_topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
+            "availability": [
+                {
+                    "topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
+                }
+            ],
         }
 
         if unit_of_measurement:
