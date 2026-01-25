@@ -137,6 +137,8 @@ def scan(
         interface = MbusInterface(
             device=app_config.mbus.device,
             baudrate=app_config.mbus.baudrate,
+            retry_count=app_config.mbus.retry_count,
+            retry_delay=app_config.mbus.retry_delay,
         )
         devices = interface.scan()
 

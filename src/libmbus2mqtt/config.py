@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Annotated, Any
 from uuid import uuid4
@@ -34,6 +36,89 @@ from libmbus2mqtt.constants import (
     POLLING_DEFAULT_INTERVAL,
     POLLING_DEFAULT_STARTUP_DELAY,
 )
+
+EnvPath = tuple[str, ...]
+
+ENV_VAR_PATHS: dict[str, EnvPath] = {
+    # M-Bus
+    f"{ENV_PREFIX}_MBUS_DEVICE": ("mbus", "device"),
+    f"{ENV_PREFIX}_MBUS_BAUDRATE": ("mbus", "baudrate"),
+    f"{ENV_PREFIX}_MBUS_TIMEOUT": ("mbus", "timeout"),
+    f"{ENV_PREFIX}_MBUS_RETRY_COUNT": ("mbus", "retry_count"),
+    f"{ENV_PREFIX}_MBUS_RETRY_DELAY": ("mbus", "retry_delay"),
+    f"{ENV_PREFIX}_MBUS_AUTOSCAN": ("mbus", "autoscan"),
+    # MQTT
+    f"{ENV_PREFIX}_MQTT_HOST": ("mqtt", "host"),
+    f"{ENV_PREFIX}_MQTT_PORT": ("mqtt", "port"),
+    f"{ENV_PREFIX}_MQTT_USERNAME": ("mqtt", "username"),
+    f"{ENV_PREFIX}_MQTT_PASSWORD": ("mqtt", "password"),
+    f"{ENV_PREFIX}_MQTT_CLIENT_ID": ("mqtt", "client_id"),
+    f"{ENV_PREFIX}_MQTT_KEEPALIVE": ("mqtt", "keepalive"),
+    f"{ENV_PREFIX}_MQTT_QOS": ("mqtt", "qos"),
+    f"{ENV_PREFIX}_MQTT_BASE_TOPIC": ("mqtt", "base_topic"),
+    # Home Assistant
+    f"{ENV_PREFIX}_HOMEASSISTANT_ENABLED": ("homeassistant", "enabled"),
+    f"{ENV_PREFIX}_HOMEASSISTANT_DISCOVERY_PREFIX": ("homeassistant", "discovery_prefix"),
+    # Polling
+    f"{ENV_PREFIX}_POLLING_INTERVAL": ("polling", "interval"),
+    f"{ENV_PREFIX}_POLLING_STARTUP_DELAY": ("polling", "startup_delay"),
+    # Availability
+    f"{ENV_PREFIX}_AVAILABILITY_TIMEOUT_POLLS": ("availability", "timeout_polls"),
+    # Logging
+    f"{ENV_PREFIX}_LOGS_LEVEL": ("logs", "level"),
+    f"{ENV_PREFIX}_LOGS_SAVE_TO_FILE": ("logs", "save_to_file"),
+    f"{ENV_PREFIX}_LOGS_FILE": ("logs", "file"),
+    f"{ENV_PREFIX}_LOGS_MAX_SIZE_MB": ("logs", "max_size_mb"),
+    f"{ENV_PREFIX}_LOGS_BACKUP_COUNT": ("logs", "backup_count"),
+}
+
+
+def _get_nested(data: dict[str, Any], path: EnvPath) -> tuple[bool, Any]:
+    """Retrieve a nested value and whether it exists."""
+    current: Any = data
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return False, None
+        current = current[key]
+    return True, current
+
+
+def _set_nested(data: dict[str, Any], path: EnvPath, value: Any) -> None:
+    """Set a nested value, creating intermediate dicts as needed."""
+    current: dict[str, Any] = data
+    for key in path[:-1]:
+        current = current.setdefault(key, {})
+    current[path[-1]] = value
+
+
+def _merge_env_with_config(config_dict: dict[str, Any]) -> dict[str, Any]:
+    """
+    Apply environment values only where config.yaml does not set a value.
+
+    Emits a warning when both env and config provide the same field.
+    """
+    merged = deepcopy(config_dict)
+    logger = logging.getLogger("libmbus2mqtt.config")
+
+    for env_var, path in ENV_VAR_PATHS.items():
+        if env_var not in os.environ:
+            continue
+
+        env_value = os.environ[env_var]
+        exists, existing_value = _get_nested(merged, path)
+
+        if exists:
+            logger.warning(
+                "Ignoring env %s; config file sets %s (using config value: %s)",
+                env_var,
+                ".".join(path),
+                existing_value,
+            )
+            continue
+
+        _set_nested(merged, path, env_value)
+
+    return merged
 
 
 class MbusConfig(BaseModel):
@@ -185,7 +270,8 @@ class AppConfig(BaseSettings):
         with path.open() as f:
             yaml_config: dict[str, Any] = yaml.safe_load(f) or {}
 
-        return cls(**yaml_config)
+        merged_config = _merge_env_with_config(yaml_config)
+        return cls(**merged_config)
 
     @classmethod
     def load(cls, config_path: Path | str | None = None) -> AppConfig:

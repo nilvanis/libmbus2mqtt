@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import re
 import subprocess
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from libmbus2mqtt.constants import LIBMBUS_BINARIES, LIBMBUS_DEFAULT_INSTALL_PATH
+from libmbus2mqtt.constants import (
+    LIBMBUS_BINARIES,
+    LIBMBUS_DEFAULT_INSTALL_PATH,
+    MBUS_DEFAULT_RETRY_COUNT,
+    MBUS_DEFAULT_RETRY_DELAY,
+)
 from libmbus2mqtt.logging import get_logger
 
 if TYPE_CHECKING:
@@ -27,10 +33,14 @@ class MbusInterface:
         device: str,
         baudrate: int = 2400,
         libmbus_path: Path | str = LIBMBUS_DEFAULT_INSTALL_PATH,
+        retry_count: int = MBUS_DEFAULT_RETRY_COUNT,
+        retry_delay: int = MBUS_DEFAULT_RETRY_DELAY,
     ) -> None:
         self.device = device
         self.baudrate = baudrate
         self.libmbus_path = Path(libmbus_path)
+        self.retry_count = retry_count
+        self.retry_delay = retry_delay
         self._validate_libmbus()
 
     def _validate_libmbus(self) -> None:
@@ -70,31 +80,60 @@ class MbusInterface:
         binary = self._get_binary_path("mbus-serial-scan")
         cmd = [binary, "-b", str(self.baudrate), self.device]
 
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-        except subprocess.TimeoutExpired:
-            logger.error(f"Scan timed out after {timeout}s")
-            return []
-        except Exception as e:
-            logger.error(f"Scan failed: {e}")
-            return []
+        last_error: Exception | None = None
 
-        # Parse output for device IDs
-        devices: list[int] = []
-        for line in result.stdout.splitlines():
-            match = SCAN_PATTERN.search(line)
-            if match:
-                device_id = int(match.group(1))
-                devices.append(device_id)
-                logger.debug(f"Found device at address {device_id}")
+        for attempt in range(self.retry_count + 1):
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
 
-        logger.info(f"Scan complete: {len(devices)} device(s) found")
-        return devices
+                if result.returncode != 0:
+                    last_error = RuntimeError(result.stderr or "scan failed")
+                    logger.warning(
+                        "Scan attempt %s failed (rc=%s): %s",
+                        attempt + 1,
+                        result.returncode,
+                        result.stderr.strip(),
+                    )
+                else:
+                    devices: list[int] = []
+                    for line in result.stdout.splitlines():
+                        match = SCAN_PATTERN.search(line)
+                        if match:
+                            device_id = int(match.group(1))
+                            devices.append(device_id)
+                            logger.debug(f"Found device at address {device_id}")
+
+                    logger.info(f"Scan complete: {len(devices)} device(s) found")
+                    return devices
+
+            except subprocess.TimeoutExpired as e:
+                last_error = e
+                logger.warning(
+                    "Scan attempt %s timed out after %ss",
+                    attempt + 1,
+                    timeout,
+                )
+            except Exception as e:  # pragma: no cover - defensive
+                last_error = e
+                logger.error(f"Scan attempt {attempt + 1} failed: {e}")
+
+            if attempt < self.retry_count:
+                logger.debug(
+                    "Retrying scan in %ss (%s/%s)",
+                    self.retry_delay,
+                    attempt + 1,
+                    self.retry_count,
+                )
+                if self.retry_delay > 0:
+                    time.sleep(self.retry_delay)
+
+        logger.error("Scan failed after %s attempt(s): %s", self.retry_count + 1, last_error)
+        return []
 
     def poll_raw(self, device_id: int, timeout: int = 10) -> str | None:
         """
@@ -115,26 +154,59 @@ class MbusInterface:
         binary = self._get_binary_path("mbus-serial-request-data")
         cmd = [binary, "-b", str(self.baudrate), self.device, str(device_id)]
 
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
+        last_error: Exception | None = None
 
-            if result.returncode != 0:
-                logger.warning(f"Poll device {device_id} failed: {result.stderr}")
-                return None
+        for attempt in range(self.retry_count + 1):
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
 
-            return result.stdout
+                if result.returncode != 0:
+                    last_error = RuntimeError(result.stderr or "poll failed")
+                    logger.warning(
+                        "Poll attempt %s for device %s failed (rc=%s): %s",
+                        attempt + 1,
+                        device_id,
+                        result.returncode,
+                        result.stderr.strip(),
+                    )
+                else:
+                    return result.stdout
 
-        except subprocess.TimeoutExpired:
-            logger.warning(f"Poll device {device_id} timed out after {timeout}s")
-            return None
-        except Exception as e:
-            logger.error(f"Poll device {device_id} failed: {e}")
-            return None
+            except subprocess.TimeoutExpired as e:
+                last_error = e
+                logger.warning(
+                    "Poll attempt %s for device %s timed out after %ss",
+                    attempt + 1,
+                    device_id,
+                    timeout,
+                )
+            except Exception as e:  # pragma: no cover - defensive
+                last_error = e
+                logger.error(f"Poll attempt {attempt + 1} for device {device_id} failed: {e}")
+
+            if attempt < self.retry_count:
+                logger.debug(
+                    "Retrying poll for device %s in %ss (%s/%s)",
+                    device_id,
+                    self.retry_delay,
+                    attempt + 1,
+                    self.retry_count,
+                )
+                if self.retry_delay > 0:
+                    time.sleep(self.retry_delay)
+
+        logger.warning(
+            "Polling device %s failed after %s attempt(s): %s",
+            device_id,
+            self.retry_count + 1,
+            last_error,
+        )
+        return None
 
     def poll(self, device_id: int, timeout: int = 10) -> MbusData | None:
         """

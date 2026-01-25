@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import signal
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from libmbus2mqtt.logging import get_logger
 from libmbus2mqtt.mbus.interface import MbusInterface
@@ -98,6 +98,8 @@ class Daemon:
         self._mbus = MbusInterface(
             device=self.config.mbus.device,
             baudrate=self.config.mbus.baudrate,
+            retry_count=self.config.mbus.retry_count,
+            retry_delay=self.config.mbus.retry_delay,
         )
 
     def _init_mqtt(self) -> None:
@@ -135,6 +137,7 @@ class Daemon:
                 enabled=device_config.enabled,
                 template_name=device_config.template,
             )
+            device.availability.timeout_threshold = self.config.availability.timeout_polls
             self._devices[device_config.id] = device
             logger.debug(f"Added device from config: address={device_config.id}")
 
@@ -149,6 +152,7 @@ class Daemon:
         for device_id in device_ids:
             if device_id not in self._devices:
                 device = Device(address=device_id)
+                device.availability.timeout_threshold = self.config.availability.timeout_polls
                 self._devices[device_id] = device
                 logger.info(f"Discovered new device at address {device_id}")
 
@@ -244,7 +248,11 @@ class Daemon:
                     self._publish_device_discovery(device)
 
                 # Publish state
-                state = mbus_data.to_ha_state(device.ha_template or {})
+                state: dict[str, Any]
+                if device.ha_template:
+                    state = mbus_data.to_ha_state(device.ha_template)
+                else:
+                    state = mbus_data.to_generic_state()
                 self._mqtt.publish_device_state(device.object_id, state)
 
                 logger.debug(f"Polled device {device.address}: success")
