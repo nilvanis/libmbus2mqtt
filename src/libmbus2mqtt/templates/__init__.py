@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import cast
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -26,7 +27,7 @@ def _get_bundled_templates_path() -> Path:
 def _load_index_file(path: Path) -> dict[str, dict[str, str | None]]:
     """Load an index file from the given path."""
     with path.open() as f:
-        return json.load(f)
+        return cast(dict[str, dict[str, str | None]], json.load(f))
 
 
 def _get_user_index() -> dict[str, dict[str, str | None]]:
