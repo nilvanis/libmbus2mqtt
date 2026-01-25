@@ -14,6 +14,7 @@ from libmbus2mqtt.constants import (
     LIBMBUS_TCP_BINARIES,
     MBUS_DEFAULT_RETRY_COUNT,
     MBUS_DEFAULT_RETRY_DELAY,
+    MBUS_DEFAULT_SCAN_TIMEOUT,
 )
 from libmbus2mqtt.logging import get_logger
 from libmbus2mqtt.mbus.utils import MbusEndpoint, parse_mbus_device
@@ -84,7 +85,7 @@ class MbusInterface:
         binary = self._get_binary_path("mbus-serial-scan")
         return [binary, "-b", str(self.baudrate), self.device]
 
-    def scan(self, timeout: int = 60) -> list[int]:
+    def scan(self, timeout: int = MBUS_DEFAULT_SCAN_TIMEOUT) -> list[int]:
         """
         Scan for M-Bus devices.
 
