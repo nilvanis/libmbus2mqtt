@@ -6,6 +6,7 @@ import signal
 import time
 from typing import TYPE_CHECKING, Any
 
+from libmbus2mqtt.constants import APP_VERSION
 from libmbus2mqtt.logging import get_logger
 from libmbus2mqtt.mbus.interface import MbusInterface
 from libmbus2mqtt.models.device import AvailabilityStatus, Device
@@ -43,7 +44,7 @@ class Daemon:
 
     def start(self) -> None:
         """Start the daemon."""
-        logger.info("Starting libmbus2mqtt daemon...")
+        logger.info(f"Starting libmbus2mqtt v{APP_VERSION}...")
         logger.info(f"M-Bus device: {self.config.mbus.device}")
         logger.info(f"MQTT broker: {self.config.mqtt.host}:{self.config.mqtt.port}")
         logger.info(
@@ -103,7 +104,7 @@ class Daemon:
         )
         if self._mbus.endpoint.type == "tcp":
             logger.info(
-                "M-Bus endpoint: TCP %s:%s (baudrate ignored)",
+                "M-Bus endpoint: TCP %s:%s",
                 self._mbus.endpoint.host,
                 self._mbus.endpoint.port,
             )
@@ -158,7 +159,7 @@ class Daemon:
         if self._mbus is None:
             return
 
-        logger.info("Scanning for M-Bus devices...")
+        logger.info("Initializing M-Bus scan...")
         device_ids = self._mbus.scan()
 
         for device_id in device_ids:
@@ -166,7 +167,7 @@ class Daemon:
                 device = Device(address=device_id)
                 device.availability.timeout_threshold = self.config.availability.timeout_polls
                 self._devices[device_id] = device
-                logger.info(f"Discovered new device at address {device_id}")
+                logger.info(f"Discovered new device at address {device_id} ({device.name})")
 
         if self._bridge_info:
             self._bridge_info.set_discovered_devices(len(self._devices))
