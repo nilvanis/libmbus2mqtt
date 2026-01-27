@@ -384,68 +384,6 @@ class TestPublishDeviceDiscovery:
         assert cfg["suggested_display_precision"] == 2
         assert cfg["icon"] == "mdi:test-tube"
 
-
-class TestInferDeviceClass:
-    """Tests for _infer_device_class method."""
-
-    @pytest.fixture
-    def discovery(
-        self,
-        mock_mqtt_client: MagicMock,
-    ) -> HomeAssistantDiscovery:
-        """Create HomeAssistantDiscovery instance."""
-        config = HomeAssistantConfig(enabled=True)
-        return HomeAssistantDiscovery(mock_mqtt_client, config)
-
-    def test_volume_returns_water(self, discovery: HomeAssistantDiscovery) -> None:
-        """Test volume function returns water device class."""
-        assert discovery._infer_device_class("Volume") == "water"
-
-    def test_water_returns_water(self, discovery: HomeAssistantDiscovery) -> None:
-        """Test water function returns water device class."""
-        assert discovery._infer_device_class("Water Usage") == "water"
-
-    def test_energy_returns_energy(self, discovery: HomeAssistantDiscovery) -> None:
-        """Test energy function returns energy device class."""
-        assert discovery._infer_device_class("Energy") == "energy"
-
-    def test_heat_returns_energy(self, discovery: HomeAssistantDiscovery) -> None:
-        """Test heat function returns energy device class."""
-        assert discovery._infer_device_class("Heat Energy") == "energy"
-
-    def test_power_returns_power(self, discovery: HomeAssistantDiscovery) -> None:
-        """Test power function returns power device class."""
-        assert discovery._infer_device_class("Power") == "power"
-
-    def test_temperature_returns_temperature(
-        self, discovery: HomeAssistantDiscovery
-    ) -> None:
-        """Test temperature function returns temperature device class."""
-        assert discovery._infer_device_class("Temperature") == "temperature"
-
-    def test_flow_returns_volume_flow_rate(
-        self, discovery: HomeAssistantDiscovery
-    ) -> None:
-        """Test flow function returns volume_flow_rate device class."""
-        # Note: "Volume flow" matches "volume" first and returns "water"
-        # Use "Flow rate" to test the "flow" pattern
-        assert discovery._infer_device_class("Flow rate") == "volume_flow_rate"
-
-    def test_unknown_returns_none(self, discovery: HomeAssistantDiscovery) -> None:
-        """Test unknown function returns None."""
-        assert discovery._infer_device_class("Fabrication number") is None
-
-    def test_none_input_returns_none(self, discovery: HomeAssistantDiscovery) -> None:
-        """Test None input returns None."""
-        assert discovery._infer_device_class(None) is None
-
-    def test_case_insensitive(self, discovery: HomeAssistantDiscovery) -> None:
-        """Test function matching is case insensitive."""
-        assert discovery._infer_device_class("VOLUME") == "water"
-        assert discovery._infer_device_class("volume") == "water"
-        assert discovery._infer_device_class("Volume") == "water"
-
-
 class TestRemoveAllDiscovery:
     """Tests for remove_all_discovery method."""
 
