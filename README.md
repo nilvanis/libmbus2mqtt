@@ -329,8 +329,6 @@ Environment variables can be used to provide config values (handy in Docker). Wh
 | LIBMBUS2MQTT_LOGS_MAX_SIZE_MB | 10 |
 | LIBMBUS2MQTT_LOGS_BACKUP_COUNT | 5 |
 
-Legacy environment variables `LIBMBUS2MQTT_POLLING_INTERVAL` and `LIBMBUS2MQTT_POLLING_STARTUP_DELAY` are still accepted for backward compatibility but will be normalized under the `mbus` section.
-
 Docker Compose example with environment variables:
 
 ```yaml
