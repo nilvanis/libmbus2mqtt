@@ -50,9 +50,6 @@ ENV_VAR_PATHS: dict[str, EnvPath] = {
     f"{ENV_PREFIX}_MBUS_RETRY_COUNT": ("mbus", "retry_count"),
     f"{ENV_PREFIX}_MBUS_RETRY_DELAY": ("mbus", "retry_delay"),
     f"{ENV_PREFIX}_MBUS_AUTOSCAN": ("mbus", "autoscan"),
-    # Legacy polling env vars (backward compatibility)
-    f"{ENV_PREFIX}_POLLING_INTERVAL": ("mbus", "poll_interval"),
-    f"{ENV_PREFIX}_POLLING_STARTUP_DELAY": ("mbus", "startup_delay"),
     # MQTT
     f"{ENV_PREFIX}_MQTT_HOST": ("mqtt", "host"),
     f"{ENV_PREFIX}_MQTT_PORT": ("mqtt", "port"),
@@ -122,27 +119,6 @@ def _merge_env_with_config(config_dict: dict[str, Any]) -> dict[str, Any]:
         _set_nested(merged, path, env_value)
 
     return merged
-
-
-def _migrate_polling_to_mbus(config_dict: dict[str, Any]) -> dict[str, Any]:
-    """Move legacy top-level polling section into mbus (backward compatibility)."""
-    if not isinstance(config_dict, dict):
-        return config_dict
-
-    if "polling" in config_dict:
-        polling = config_dict.pop("polling") or {}
-        mbus = config_dict.get("mbus") or {}
-        if not isinstance(mbus, dict):
-            mbus = {}
-
-        if "interval" in polling and "poll_interval" not in mbus:
-            mbus["poll_interval"] = polling["interval"]
-        if "startup_delay" in polling and "startup_delay" not in mbus:
-            mbus["startup_delay"] = polling["startup_delay"]
-
-        config_dict["mbus"] = mbus
-
-    return config_dict
 
 
 class MbusConfig(BaseModel):
@@ -299,8 +275,7 @@ class AppConfig(BaseSettings):
             yaml_config: dict[str, Any] = yaml.safe_load(f) or {}
 
         merged_config = _merge_env_with_config(yaml_config)
-        migrated_config = _migrate_polling_to_mbus(merged_config)
-        return cls(**migrated_config)
+        return cls(**merged_config)
 
     @classmethod
     def load(cls, config_path: Path | str | None = None) -> AppConfig:
