@@ -249,7 +249,11 @@ class HomeAssistantDiscovery:
     ) -> None:
         """Publish entities defined in a device template."""
         for entity_id, entity_config in template.items():
-            component = entity_config.get("component", "sensor")
+            component = (
+                entity_config.get("component")
+                or entity_config.get("platform")  # support legacy key used in templates
+                or "sensor"
+            )
             object_id = f"{APP_NAME}_{device.object_id}_{entity_id}"
 
             config: dict[str, Any] = {
@@ -260,19 +264,17 @@ class HomeAssistantDiscovery:
                 "availability": availability,
             }
 
-            # Add value template if specified
-            if "value_template" in entity_config:
-                config["value_template"] = entity_config["value_template"]
+            # Merge all template-defined fields except component/platform (handled above)
+            for key, value in entity_config.items():
+                if key in {"component", "platform"}:
+                    continue
+                config[key] = value
 
-            # Add optional fields
-            for field in [
-                "device_class",
-                "unit_of_measurement",
-                "state_class",
-                "icon",
-            ]:
-                if field in entity_config:
-                    config[field] = entity_config[field]
+            # Ensure core linkage fields are not overridden by template
+            config["unique_id"] = object_id
+            config["device"] = device_info
+            config["state_topic"] = state_topic
+            config["availability"] = availability
 
             self.mqtt.publish_ha_discovery(
                 component=component,
