@@ -36,7 +36,7 @@
         "value_template": "{{ value_json.volume_forward | float / 1000 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "5": {
         "name": "Volume: Reverse",
@@ -45,7 +45,7 @@
         "value_template":"{{  value_json.volume_reverse  | float / 1000 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "6": {
         "name": "Volume: Month Start",
@@ -54,7 +54,7 @@
         "value_template":"{{ value_json.volume_month_start | float / 1000 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "7": {
         "name": "Manufacturer Specific",

@@ -20,7 +20,7 @@
         "value_template":"{{ value_json.volume | float / 100 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "3": {
         "name": "Volume: Flow",
@@ -29,7 +29,7 @@
         "value_template":"{{ value_json.volume_flow | float / 100 }}",
         "device_class": "volume_flow_rate",
         "unit_of_measurement": "m³/h",
-        "state_class": "MEASUREMENT"
+        "state_class": "measurement"
     },
     "4": {
         "name": "Volume: Time Point 1",
@@ -38,7 +38,7 @@
         "value_template":"{{ value_json.volume_tp1 | float / 1000 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "5": {
         "name": "Time Point 1 (Date)",
@@ -55,7 +55,7 @@
         "value_template":"{{ value_json.volume_tp2 | float / 1000 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "7": {
         "name": "Time Point 2 (Date)",
@@ -72,7 +72,7 @@
         "value_template":"{{ value_json.volume_tp3 | float / 1000 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "9": {
         "name": "Time Point 3 (Date)",
@@ -89,7 +89,7 @@
         "value_template":"{{ value_json.volume_tp4 | float / 1000 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "11": {
         "name": "Time Point 4 (Date)",
@@ -106,7 +106,7 @@
         "value_template":"{{ value_json.volume_flow | float / 100 }}",
         "device_class": "volume_flow_rate",
         "unit_of_measurement": "m³/h",
-        "state_class": "MEASUREMENT"
+        "state_class": "measurement"
     },
     "13": {
         "name": "On Time",

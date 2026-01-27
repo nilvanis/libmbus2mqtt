@@ -20,7 +20,7 @@
         "value_template":"{{ value_json.volume_forward | float / 1000 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "3": {
         "name": "Volume: Flow",
@@ -29,7 +29,7 @@
         "value_template":"{{ value_json.volume_flow | float / 1000 }}",
         "device_class": "volume_flow_rate",
         "unit_of_measurement": "m³/h",
-        "state_class": "MEASUREMENT"
+        "state_class": "measurement"
     },
     "4": {
         "name": "Volume: Month Start",
@@ -38,7 +38,7 @@
         "value_template":"{{ value_json.volume_month_start | float / 1000 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "5": {
         "name": "Time Point (Date)",

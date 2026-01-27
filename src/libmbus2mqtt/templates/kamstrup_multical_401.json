@@ -6,7 +6,7 @@
         "value_template":"{{ value_json.energy }}",
         "device_class": "energy",
         "unit_of_measurement": "kWh",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "1": {
         "name": "Volume",
@@ -15,7 +15,7 @@
         "value_template": "{{ value_json.volume | float / 100 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "2": {
         "name": "On Time",
@@ -23,7 +23,7 @@
         "platform": "sensor",
         "value_template": "{{ value_json.on_time }}",
         "unit_of_measurement": "h",
-        "state_class": "TOTAL_INCREASING",
+        "state_class": "total_increasing",
         "entity_category": "diagnostic"
     },
     "3": {
@@ -73,7 +73,7 @@
         "value_template":"{{ value_json.energy_tp }}",
         "device_class": "energy",
         "unit_of_measurement": "kWh",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "9": {
         "name": "Volume: Time Point",
@@ -82,7 +82,7 @@
         "value_template": "{{ value_json.volume_tp | float / 100 }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "10": {
         "name": "Time Point",
@@ -105,7 +105,7 @@
         "value_template": "{% set data = value_json.manufacturer_specific %} {{ data.split()[30:34] | reverse | join('') | int / 100 | round(2) }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     },
     "custom-pulse_input_b_volume": {
         "name": "Pulse Input B: Volume",
@@ -114,6 +114,6 @@
         "value_template": "{% set data = value_json.manufacturer_specific %} {{ data.split()[34:38] | reverse | join('') | int / 100 | round(2) }}",
         "device_class": "water",
         "unit_of_measurement": "m³",
-        "state_class": "TOTAL_INCREASING"
+        "state_class": "total_increasing"
     }
 }
