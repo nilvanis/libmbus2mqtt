@@ -26,6 +26,8 @@ class TestMbusConfig:
         config = MbusConfig(device="/dev/ttyUSB0")
         assert config.device == "/dev/ttyUSB0"
         assert config.baudrate == 2400  # default
+        assert config.poll_interval == 60  # default
+        assert config.startup_delay == 5  # default
         assert config.timeout == 5  # default
         assert config.retry_count == 3  # default
         assert config.autoscan is True  # default
@@ -353,6 +355,24 @@ devices:
 
         with pytest.raises(ValidationError):
             AppConfig.from_yaml(config_file)
+
+    def test_from_yaml_migrates_polling_section(self, tmp_path: Path) -> None:
+        """Legacy top-level polling section is migrated under mbus."""
+        config_yaml = """
+mbus:
+  device: /dev/ttyUSB0
+mqtt:
+  host: mqtt.local
+polling:
+  interval: 45
+  startup_delay: 3
+"""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(config_yaml)
+
+        config = AppConfig.from_yaml(config_file)
+        assert config.mbus.poll_interval == 45
+        assert config.mbus.startup_delay == 3
 
 
 class TestGenerateExampleConfig:

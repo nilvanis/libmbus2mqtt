@@ -44,10 +44,15 @@ ENV_VAR_PATHS: dict[str, EnvPath] = {
     # M-Bus
     f"{ENV_PREFIX}_MBUS_DEVICE": ("mbus", "device"),
     f"{ENV_PREFIX}_MBUS_BAUDRATE": ("mbus", "baudrate"),
+    f"{ENV_PREFIX}_MBUS_POLL_INTERVAL": ("mbus", "poll_interval"),
+    f"{ENV_PREFIX}_MBUS_STARTUP_DELAY": ("mbus", "startup_delay"),
     f"{ENV_PREFIX}_MBUS_TIMEOUT": ("mbus", "timeout"),
     f"{ENV_PREFIX}_MBUS_RETRY_COUNT": ("mbus", "retry_count"),
     f"{ENV_PREFIX}_MBUS_RETRY_DELAY": ("mbus", "retry_delay"),
     f"{ENV_PREFIX}_MBUS_AUTOSCAN": ("mbus", "autoscan"),
+    # Legacy polling env vars (backward compatibility)
+    f"{ENV_PREFIX}_POLLING_INTERVAL": ("mbus", "poll_interval"),
+    f"{ENV_PREFIX}_POLLING_STARTUP_DELAY": ("mbus", "startup_delay"),
     # MQTT
     f"{ENV_PREFIX}_MQTT_HOST": ("mqtt", "host"),
     f"{ENV_PREFIX}_MQTT_PORT": ("mqtt", "port"),
@@ -60,9 +65,6 @@ ENV_VAR_PATHS: dict[str, EnvPath] = {
     # Home Assistant
     f"{ENV_PREFIX}_HOMEASSISTANT_ENABLED": ("homeassistant", "enabled"),
     f"{ENV_PREFIX}_HOMEASSISTANT_DISCOVERY_PREFIX": ("homeassistant", "discovery_prefix"),
-    # Polling
-    f"{ENV_PREFIX}_POLLING_INTERVAL": ("polling", "interval"),
-    f"{ENV_PREFIX}_POLLING_STARTUP_DELAY": ("polling", "startup_delay"),
     # Availability
     f"{ENV_PREFIX}_AVAILABILITY_TIMEOUT_POLLS": ("availability", "timeout_polls"),
     # Logging
@@ -122,6 +124,27 @@ def _merge_env_with_config(config_dict: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
+def _migrate_polling_to_mbus(config_dict: dict[str, Any]) -> dict[str, Any]:
+    """Move legacy top-level polling section into mbus (backward compatibility)."""
+    if not isinstance(config_dict, dict):
+        return config_dict
+
+    if "polling" in config_dict:
+        polling = config_dict.pop("polling") or {}
+        mbus = config_dict.get("mbus") or {}
+        if not isinstance(mbus, dict):
+            mbus = {}
+
+        if "interval" in polling and "poll_interval" not in mbus:
+            mbus["poll_interval"] = polling["interval"]
+        if "startup_delay" in polling and "startup_delay" not in mbus:
+            mbus["startup_delay"] = polling["startup_delay"]
+
+        config_dict["mbus"] = mbus
+
+    return config_dict
+
+
 class MbusConfig(BaseModel):
     """M-Bus interface configuration."""
 
@@ -130,6 +153,12 @@ class MbusConfig(BaseModel):
         description="Serial/TTY device path or IPv4:port (e.g. 192.168.1.10:9999)",
     )
     baudrate: int = Field(default=MBUS_DEFAULT_BAUDRATE, description="Baud rate")
+    poll_interval: int = Field(
+        default=POLLING_DEFAULT_INTERVAL, ge=1, description="Poll interval in seconds"
+    )
+    startup_delay: int = Field(
+        default=POLLING_DEFAULT_STARTUP_DELAY, ge=0, description="Startup delay in seconds"
+    )
     timeout: int = Field(default=MBUS_DEFAULT_TIMEOUT, ge=1, description="Timeout in seconds")
     retry_count: int = Field(default=MBUS_DEFAULT_RETRY_COUNT, ge=0, description="Retry count")
     retry_delay: int = Field(default=MBUS_DEFAULT_RETRY_DELAY, ge=0, description="Retry delay")
@@ -175,17 +204,6 @@ class HomeAssistantConfig(BaseModel):
     enabled: bool = Field(default=False, description="Enable HA integration")
     discovery_prefix: str = Field(
         default=HA_DEFAULT_DISCOVERY_PREFIX, description="HA discovery prefix"
-    )
-
-
-class PollingConfig(BaseModel):
-    """Polling configuration."""
-
-    interval: int = Field(
-        default=POLLING_DEFAULT_INTERVAL, ge=1, description="Poll interval in seconds"
-    )
-    startup_delay: int = Field(
-        default=POLLING_DEFAULT_STARTUP_DELAY, ge=0, description="Startup delay in seconds"
     )
 
 
@@ -266,7 +284,6 @@ class AppConfig(BaseSettings):
     mbus: MbusConfig
     mqtt: MqttConfig
     homeassistant: HomeAssistantConfig = Field(default_factory=HomeAssistantConfig)
-    polling: PollingConfig = Field(default_factory=PollingConfig)
     devices: list[DeviceConfig] = Field(default_factory=list)
     availability: AvailabilityConfig = Field(default_factory=AvailabilityConfig)
     logs: LogsConfig = Field(default_factory=LogsConfig)
@@ -282,7 +299,8 @@ class AppConfig(BaseSettings):
             yaml_config: dict[str, Any] = yaml.safe_load(f) or {}
 
         merged_config = _merge_env_with_config(yaml_config)
-        return cls(**merged_config)
+        migrated_config = _migrate_polling_to_mbus(merged_config)
+        return cls(**migrated_config)
 
     @classmethod
     def load(cls, config_path: Path | str | None = None) -> AppConfig:
@@ -316,7 +334,6 @@ class AppConfig(BaseSettings):
             "mbus": self.mbus.model_dump(exclude_none=True),
             "mqtt": self.mqtt.model_dump(exclude_none=True),
             "homeassistant": self.homeassistant.model_dump(),
-            "polling": self.polling.model_dump(),
             "availability": self.availability.model_dump(),
             "logs": self.logs.model_dump(mode="json"),
         }
@@ -338,9 +355,11 @@ def generate_example_config() -> str:
 mbus:
   device: /dev/ttyUSB0          # Serial/TTY device path OR IPv4:port (e.g. 192.168.1.50:9999)
   # baudrate: 2400              # Options: 300, 2400, 9600 (ignored for TCP)
-  # timeout: 5                  # Seconds
-  # retry_count: 3
-  # retry_delay: 1              # Seconds
+  poll_interval: 60             # Seconds between polling cycles
+  # startup_delay: 5            # Seconds to wait before first poll/scan
+  # timeout: 5                  # Seconds to wait for device response
+  # retry_count: 3              # Number of retries on failure
+  # retry_delay: 1              # Seconds between retries
   # autoscan: true              # Scan for devices on startup
 
 # MQTT Broker (required: host)
@@ -358,11 +377,6 @@ mqtt:
 homeassistant:
   enabled: false
   # discovery_prefix: homeassistant
-
-# Polling
-polling:
-  interval: 60                  # Seconds
-  # startup_delay: 5            # Seconds
 
 # Devices (optional - auto-discovered if autoscan=true)
 # devices:

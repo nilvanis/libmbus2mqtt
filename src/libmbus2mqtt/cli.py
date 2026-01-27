@@ -545,7 +545,7 @@ def config_validate(
         console.print(
             f"  Home Assistant:  {'Enabled' if app_config.homeassistant.enabled else 'Disabled'}"
         )
-        console.print(f"  Poll interval:   {app_config.polling.interval}s")
+        console.print(f"  Poll interval:   {app_config.mbus.poll_interval}s")
         console.print(f"  Autoscan:        {'Enabled' if app_config.mbus.autoscan else 'Disabled'}")
         console.print(f"  Devices defined: {len(app_config.devices)}")
 
