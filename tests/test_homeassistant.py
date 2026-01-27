@@ -349,6 +349,41 @@ class TestPublishDeviceDiscovery:
         mock_mqtt_client.publish_ha_discovery.assert_not_called()
         assert device.ha_discovery_published is False
 
+    def test_template_fields_passthrough(
+        self,
+        mock_mqtt_client: MagicMock,
+    ) -> None:
+        """Template-defined discovery fields should be passed through."""
+        discovery = HomeAssistantDiscovery(mock_mqtt_client, HomeAssistantConfig(enabled=True))
+        device = Device(address=1)
+        device_info = get_mbus_device_info(device)
+        template = {
+            "custom": {
+                "component": "sensor",
+                "name": "Custom Sensor",
+                "value_template": "{{ value_json.custom }}",
+                "entity_category": "diagnostic",
+                "enabled_by_default": False,
+                "suggested_display_precision": 2,
+                "icon": "mdi:test-tube",
+            }
+        }
+
+        discovery._publish_template_entities(
+            device=device,
+            device_info=device_info,
+            template=template,
+            state_topic="test/state",
+            availability=[],
+        )
+
+        args = mock_mqtt_client.publish_ha_discovery.call_args
+        cfg = args.kwargs["config"]
+        assert cfg["entity_category"] == "diagnostic"
+        assert cfg["enabled_by_default"] is False
+        assert cfg["suggested_display_precision"] == 2
+        assert cfg["icon"] == "mdi:test-tube"
+
 
 class TestInferDeviceClass:
     """Tests for _infer_device_class method."""
