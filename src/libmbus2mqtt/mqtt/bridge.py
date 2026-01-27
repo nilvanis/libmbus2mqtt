@@ -93,10 +93,8 @@ class BridgeInfo:
             "uptime": self.uptime,
             "log_level": self.get_current_log_level(),
             "poll_interval": self._poll_interval,
+            "last_scan": self._last_scan.isoformat() if self._last_scan else None,
         }
-
-        if self._last_scan:
-            state["last_scan"] = self._last_scan.isoformat()
 
         if self._last_poll_duration_ms is not None:
             state["last_poll_duration_ms"] = self._last_poll_duration_ms
