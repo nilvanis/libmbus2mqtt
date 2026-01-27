@@ -4,7 +4,7 @@ from pathlib import Path
 
 # Application info
 APP_NAME = "libmbus2mqtt"
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.0.1"
 
 # Paths
 DEFAULT_DATA_DIR = Path("/data")
