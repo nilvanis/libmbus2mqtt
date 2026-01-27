@@ -13,8 +13,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /build
 
 # Clone and build libmbus
+# Adjust TCP timeout from 4 seconds to 1 second
 RUN git clone --depth 1 https://github.com/rscada/libmbus.git && \
     cd libmbus && \
+    sed -i 's/^static int tcp_timeout_sec = 4;$/static int tcp_timeout_sec = 1;/' mbus/mbus-tcp.c && \
     ./build.sh && \
     make install DESTDIR=/install
 
