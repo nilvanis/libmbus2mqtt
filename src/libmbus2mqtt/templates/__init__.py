@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import json
-from typing import cast
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from libmbus2mqtt.constants import TEMPLATES_DIR
 from libmbus2mqtt.logging import get_logger

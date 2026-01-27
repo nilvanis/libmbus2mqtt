@@ -253,6 +253,8 @@ mbus:
                                 # Serial examples: /dev/ttyUSB0, /dev/ttyACM0, /dev/ttyAMA0
                                 # TCP example: 192.168.1.50:9999 (IPv4 only, no hostnames)
   baudrate: 2400                # M-Bus baudrate (300, 2400, or 9600) - ignored for TCP
+  poll_interval: 60             # Seconds between polling cycles
+  startup_delay: 5              # Seconds to wait before first poll/scan
   timeout: 5                    # Seconds to wait for device response
   retry_count: 3                # Number of retries on failure
   retry_delay: 1                # Seconds between retries
@@ -273,11 +275,6 @@ mqtt:
 homeassistant:
   enabled: false                # Enable Home Assistant MQTT Discovery
   discovery_prefix: homeassistant
-
-# Polling
-polling:
-  interval: 60                  # Seconds between polling cycles
-  startup_delay: 5              # Seconds to wait before first poll
 
 # Devices (optional)
 # Must be defined if 'mbus' -> 'autoscan' is set to 'false')
@@ -309,6 +306,8 @@ Environment variables can be used to provide config values (handy in Docker). Wh
 | --- | --- |
 | LIBMBUS2MQTT_MBUS_DEVICE | /dev/ttyAMA0 |
 | LIBMBUS2MQTT_MBUS_BAUDRATE | 2400 |
+| LIBMBUS2MQTT_MBUS_POLL_INTERVAL | 60 |
+| LIBMBUS2MQTT_MBUS_STARTUP_DELAY | 5 |
 | LIBMBUS2MQTT_MBUS_TIMEOUT | 5 |
 | LIBMBUS2MQTT_MBUS_RETRY_COUNT | 3 |
 | LIBMBUS2MQTT_MBUS_RETRY_DELAY | 1 |
@@ -323,14 +322,14 @@ Environment variables can be used to provide config values (handy in Docker). Wh
 | LIBMBUS2MQTT_MQTT_BASE_TOPIC | libmbus2mqtt |
 | LIBMBUS2MQTT_HOMEASSISTANT_ENABLED | true |
 | LIBMBUS2MQTT_HOMEASSISTANT_DISCOVERY_PREFIX | homeassistant |
-| LIBMBUS2MQTT_POLLING_INTERVAL | 120 |
-| LIBMBUS2MQTT_POLLING_STARTUP_DELAY | 5 |
 | LIBMBUS2MQTT_AVAILABILITY_TIMEOUT_POLLS | 3 |
 | LIBMBUS2MQTT_LOGS_LEVEL | INFO |
 | LIBMBUS2MQTT_LOGS_SAVE_TO_FILE | false |
 | LIBMBUS2MQTT_LOGS_FILE | data/log/libmbus2mqtt.log |
 | LIBMBUS2MQTT_LOGS_MAX_SIZE_MB | 10 |
 | LIBMBUS2MQTT_LOGS_BACKUP_COUNT | 5 |
+
+Legacy environment variables `LIBMBUS2MQTT_POLLING_INTERVAL` and `LIBMBUS2MQTT_POLLING_STARTUP_DELAY` are still accepted for backward compatibility but will be normalized under the `mbus` section.
 
 Docker Compose example with environment variables:
 

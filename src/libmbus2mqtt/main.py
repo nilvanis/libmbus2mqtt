@@ -29,7 +29,7 @@ class Daemon:
         self.config = config
         self._running = False
         self._rescan_requested = False
-        self._poll_interval = config.polling.interval
+        self._poll_interval = config.mbus.poll_interval
 
         # Components
         self._mbus: MbusInterface | None = None
@@ -70,9 +70,9 @@ class Daemon:
                 self._scan_devices()
 
             # Startup delay
-            if self.config.polling.startup_delay > 0:
-                logger.info(f"Waiting {self.config.polling.startup_delay}s before first poll...")
-                time.sleep(self.config.polling.startup_delay)
+            if self.config.mbus.startup_delay > 0:
+                logger.info(f"Waiting {self.config.mbus.startup_delay}s before first poll...")
+                time.sleep(self.config.mbus.startup_delay)
 
             # Main loop
             self._running = True

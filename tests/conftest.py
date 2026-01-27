@@ -15,7 +15,6 @@ from libmbus2mqtt.config import (
     LogsConfig,
     MbusConfig,
     MqttConfig,
-    PollingConfig,
 )
 from libmbus2mqtt.mbus.parser import parse_xml
 from libmbus2mqtt.models.device import Device
@@ -153,6 +152,8 @@ def full_app_config() -> AppConfig:
         mbus=MbusConfig(
             device="/dev/ttyUSB0",
             baudrate=2400,
+            poll_interval=60,
+            startup_delay=5,
             timeout=5,
             retry_count=3,
             retry_delay=1,
@@ -172,7 +173,6 @@ def full_app_config() -> AppConfig:
             enabled=True,
             discovery_prefix="homeassistant",
         ),
-        polling=PollingConfig(interval=60, startup_delay=5),
         devices=[
             DeviceConfig(id=1, name="Water Meter", enabled=True),
             DeviceConfig(id=2, name="Heat Meter", enabled=False),
