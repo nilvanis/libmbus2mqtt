@@ -177,6 +177,10 @@ class Daemon:
         """Handle MQTT connection established."""
         logger.info("MQTT connected, publishing discovery configs...")
 
+        # Publish bridge info first so state payload is retained before discovery
+        if self._bridge_info:
+            self._bridge_info.publish()
+
         # Publish bridge discovery
         if self._ha_discovery:
             self._ha_discovery.publish_bridge_discovery()
@@ -185,10 +189,6 @@ class Daemon:
         for device in self._devices.values():
             if device.enabled and device.mbus_data:
                 self._publish_device_discovery(device)
-
-        # Publish bridge info
-        if self._bridge_info:
-            self._bridge_info.publish()
 
     def _on_mqtt_disconnect(self) -> None:
         """Handle MQTT disconnection."""
