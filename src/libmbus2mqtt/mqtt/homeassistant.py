@@ -200,7 +200,7 @@ class HomeAssistantDiscovery:
         if not self.config.enabled:
             return
 
-        logger.info(f"Publishing HA discovery for device {device.object_id}")
+        logger.info(f"Publishing HA discovery for device ID {device.address}: {device.name}")
 
         device_info = get_mbus_device_info(device)
         base = self.base_topic
@@ -293,7 +293,7 @@ class HomeAssistantDiscovery:
     ) -> None:
         """Publish generic entities based on M-Bus data records."""
         if not device.mbus_data:
-            logger.warning(f"No M-Bus data for device {device.object_id}")
+            logger.warning(f"No M-Bus data for device ID {device.address} ({device.name})")
             return
 
         for record_key, record in device.mbus_data.data_records.items():
@@ -316,12 +316,6 @@ class HomeAssistantDiscovery:
             if record.unit:
                 config["unit_of_measurement"] = record.unit
 
-            # Try to infer device class from function name
-            device_class = self._infer_device_class(record.function)
-            if device_class:
-                config["device_class"] = device_class
-                config["state_class"] = "total_increasing"
-
             self.mqtt.publish_ha_discovery(
                 component="sensor",
                 object_id=object_id,
@@ -329,28 +323,6 @@ class HomeAssistantDiscovery:
                 discovery_prefix=self.discovery_prefix,
             )
             self._published_entities.add(f"sensor/{object_id}")
-
-    def _infer_device_class(self, function: str | None) -> str | None:
-        """Infer HA device class from M-Bus function name."""
-        if not function:
-            return None
-
-        function_lower = function.lower()
-
-        if "volume" in function_lower or "water" in function_lower:
-            return "water"
-        if "energy" in function_lower or "heat" in function_lower:
-            return "energy"
-        if "power" in function_lower:
-            return "power"
-        if "temperature" in function_lower:
-            return "temperature"
-        if "pressure" in function_lower:
-            return "pressure"
-        if "flow" in function_lower:
-            return "volume_flow_rate"
-
-        return None
 
     def _build_device_availability_list(self, device_availability_topic: str) -> list[dict[str, str]]:
         """Build HA availability list combining bridge and device availability topics."""
