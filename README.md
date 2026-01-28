@@ -11,14 +11,16 @@ Read your wired M-Bus meters (water, heat, gas, electricity) and send the data t
 
 ## Features
 
-- Reading M-Bus devices via 'TTL to M-Bus' converter or 'USB to M-Bus adapter'
-- Reading via TCP-connected M-Bus master (IPv4:port)
+- Reading M-Bus devices via serial M-Bus Master connected over:
+  - TTL (UART)
+  - USB
+  - IPv4 TCP (using for example **ser2net**)
 - Automatic discovery of connected M-Bus meters
 - Publishing meter data to MQTT
 - Home Assistant MQTT Discovery integration:
   - Automatic device and entity creation
   - Device availability reporting
-  - Bridge device with controls (rescan, log level, poll interval)
+  - Bridge device entity with controls (rescan, log level, poll interval)
 - Template system to support different M-Bus device types
 - Docker support with pre-compiled libmbus
 - Systemd service for native Linux installation
@@ -26,7 +28,7 @@ Read your wired M-Bus meters (water, heat, gas, electricity) and send the data t
 ## Table of Contents
 
 - [Requirements](#requirements)
-- [Quick Start with Docker](#quick-start-with-docker)
+- ⚡[Quick Start with Docker (recommended)](#quick-start-with-docker-recommended)
 - [Native Installation](#native-installation)
 - [Configuration](#configuration)
 - [Running libmbus2mqtt](#running-libmbus2mqtt)
@@ -41,35 +43,20 @@ Read your wired M-Bus meters (water, heat, gas, electricity) and send the data t
 ## Requirements
 
 - **M-Bus Master adapter** - converts TTL/USB signals to M-Bus protocol
-  - TTL to M-Bus converter (e.g., [this one from AliExpress](https://www.aliexpress.com/item/1005003292386193.html))
-  - USB to M-Bus adapter
+  - TTL to M-Bus converter ([example from AliExpress](https://s.click.aliexpress.com/e/_c2w4h9UB))
+  - USB to M-Bus adapter ([example from AliExpress](https://s.click.aliexpress.com/e/_c4kbrInv))
 - **Any Linux host device** with access to M-Bus Master via:
   - UART (TTL)
   - USB
-  - serial-over-ethernet (socat)
-- **Docker** / **Docker-Compose**
+  - IPv4 TCP
+- **Docker** / **Docker Compose**
 - **Python 3.11+** for native installation
 
 ---
 
-## Quick Start with Docker
+## Quick Start with Docker (recommended)
 
 Docker is the easiest way to get started - libmbus is pre-compiled in the image.
-
-### Docker Image
-
-```bash
-docker pull nilvanis/libmbus2mqtt:latest
-```
-
-**Available tags:**
-
-- `latest` - Latest stable release
-- `2.0.0` - Specific version
-- `2.0` - Latest patch of minor version
-- `2` - Latest minor/patch of major version
-
-**Supported architectures:** `linux/amd64`, `linux/arm64`
 
 ### Step 1: Create the project directory
 
@@ -180,11 +167,6 @@ libmbus2mqtt config init --config /data/config/config.yaml
 # Edit the configuration
 sudo nano /data/config/config.yaml
 ```
-
-Set at minimum:
-
-- `mbus.device`: Your serial device path (e.g., `/dev/ttyUSB0`)
-- `mqtt.host`: Your MQTT broker address
 
 ### Step 3: Test the connection
 
@@ -300,34 +282,35 @@ logs:
 
 ### Environment Variables
 
-Environment variables can be used to provide config values (handy in Docker). When both the YAML file and an environment variable set the same field, the **environment variable takes precedence** and the override is logged.
+Environment variables can be used to provide config values (handy in Docker). When both the YAML file and an environment variable set the same field, the **environment variable takes precedence** and the override is logged.\
+Env var naming convention is based on config.yaml: `LIBMBUS2MQTT_SECTION_OPTION`. Below is complete list:
 
-| ENV VAR | DEFAULT |
-| --- | --- |
-| LIBMBUS2MQTT_MBUS_DEVICE | |
-| LIBMBUS2MQTT_MBUS_BAUDRATE | 2400 |
-| LIBMBUS2MQTT_MBUS_POLL_INTERVAL | 60 |
-| LIBMBUS2MQTT_MBUS_STARTUP_DELAY | 5 |
-| LIBMBUS2MQTT_MBUS_TIMEOUT | 5 |
-| LIBMBUS2MQTT_MBUS_RETRY_COUNT | 3 |
-| LIBMBUS2MQTT_MBUS_RETRY_DELAY | 1 |
-| LIBMBUS2MQTT_MBUS_AUTOSCAN | true |
-| LIBMBUS2MQTT_MQTT_HOST | 192.168.1.100 |
-| LIBMBUS2MQTT_MQTT_PORT | 1883 |
-| LIBMBUS2MQTT_MQTT_USERNAME | myuser |
-| LIBMBUS2MQTT_MQTT_PASSWORD | mypassword |
-| LIBMBUS2MQTT_MQTT_CLIENT_ID | libmbus2mqtt-`generated_id` |
-| LIBMBUS2MQTT_MQTT_KEEPALIVE | 60 |
-| LIBMBUS2MQTT_MQTT_QOS | 1 |
-| LIBMBUS2MQTT_MQTT_BASE_TOPIC | libmbus2mqtt |
-| LIBMBUS2MQTT_HOMEASSISTANT_ENABLED | true |
-| LIBMBUS2MQTT_HOMEASSISTANT_DISCOVERY_PREFIX | homeassistant |
-| LIBMBUS2MQTT_AVAILABILITY_TIMEOUT_POLLS | 3 |
-| LIBMBUS2MQTT_LOGS_LEVEL | INFO |
-| LIBMBUS2MQTT_LOGS_SAVE_TO_FILE | false |
-| LIBMBUS2MQTT_LOGS_FILE | data/log/libmbus2mqtt.log |
-| LIBMBUS2MQTT_LOGS_MAX_SIZE_MB | 10 |
-| LIBMBUS2MQTT_LOGS_BACKUP_COUNT | 5 |
+```
+LIBMBUS2MQTT_MBUS_DEVICE
+LIBMBUS2MQTT_MBUS_BAUDRATE
+LIBMBUS2MQTT_MBUS_POLL_INTERVAL
+LIBMBUS2MQTT_MBUS_STARTUP_DELAY
+LIBMBUS2MQTT_MBUS_TIMEOUT
+LIBMBUS2MQTT_MBUS_RETRY_COUNT
+LIBMBUS2MQTT_MBUS_RETRY_DELAY
+LIBMBUS2MQTT_MBUS_AUTOSCAN
+LIBMBUS2MQTT_MQTT_HOST
+LIBMBUS2MQTT_MQTT_PORT
+LIBMBUS2MQTT_MQTT_USERNAME
+LIBMBUS2MQTT_MQTT_PASSWORD
+LIBMBUS2MQTT_MQTT_CLIENT_ID
+LIBMBUS2MQTT_MQTT_KEEPALIVE
+LIBMBUS2MQTT_MQTT_QOS
+LIBMBUS2MQTT_MQTT_BASE_TOPIC
+LIBMBUS2MQTT_HOMEASSISTANT_ENABLED
+LIBMBUS2MQTT_HOMEASSISTANT_DISCOVERY_PREFIX
+LIBMBUS2MQTT_AVAILABILITY_TIMEOUT_POLLS
+LIBMBUS2MQTT_LOGS_LEVEL
+LIBMBUS2MQTT_LOGS_SAVE_TO_FILE
+LIBMBUS2MQTT_LOGS_FILE
+LIBMBUS2MQTT_LOGS_MAX_SIZE_MB
+LIBMBUS2MQTT_LOGS_BACKUP_COUNT
+```
 
 Docker Compose example with environment variables:
 
@@ -574,15 +557,55 @@ Check with:
 ls -l /dev/ttyUSB* /dev/ttyACM*
 ```
 
-### Serial over Ethernet (socat)
+## IPv4 TCP using ser2net
+You can run libmbus2mqtt on one device and access M-Bus Master connected to another one. Below is an example how to configure that:
 
-For remote serial devices, use socat to create a virtual serial port:
+#### Step 1: Connect M-Bus Master to a linux device
+Use the information above and note the device path.
 
-```bash
-socat pty,link=/dev/mbus,raw tcp:192.168.1.50:4001 &
+#### Step 2: Install and configure ser2net
+```cli
+sudo apt update && sudo apt install ser2net -y
+sudo nano /etc/ser2net.yaml
+```
+Remove existing ser2net config if not used.
+Create new entry for your M-Bus Master (example for Raspberry Pi UART):
+```
+connection: &uart0
+  accepter: tcp(nodelay=true),0.0.0.0,4001
+  enable: on
+  options:
+    kickolduser: true
+    chardelay: false
+  connector:  serialdev,/dev/ttyAMA0,2400e81,local
 ```
 
-Then configure libmbus2mqtt to use `/dev/mbus`.
+- `4001` is the TCP port number over which your M-Bus Master will be available.
+- `0.0.0.0` means that the ser2net will open port on all IP interfaces configured on the linux host. You can specify a single IP here if needed.
+- `/dev/ttyAMA0` is the M-Bus master device path
+- `2400e81` - serial settings:
+  - speed: `2400` baud
+  - parity: `e` (even)
+  - data bits: `8`
+  - stop bits: `1`
+
+Start the ser2net service:
+```
+sudo systemctl enable ser2net
+sudo systemctl start ser2net
+```
+
+You might also need to open firewall if used (inbound TCP/4001)
+
+#### Step 3: Configure libmbus2mqtt
+In libmbus2mqtt `config.yaml` file you just need to set mbus.device to IP:4001, e.g.:
+```yaml
+mbus:
+  device: '192.168.1.50:4001'
+```
+
+> [!IMPORTANT]
+> M-Bus scan over TCP can take up to 20 minutes! Currently it should take around 5 minutes if using Docker.
 
 ---
 
@@ -632,10 +655,12 @@ docker compose logs -f libmbus2mqtt
 
 # Systemd service
 sudo journalctl -u libmbus2mqtt -f
-
-# Direct run (more verbose)
-libmbus2mqtt run --log-level DEBUG
 ```
+
+You can set log level to DEBUG temporarily in Home Assistant MQTT device "libmbus2mqtt Bridge".\
+You can also set the log level permanently using either:
+- config.yaml `log.level` option
+- `LIBMBUS2MQTT_LOGS_LEVEL` env variable
 
 ### Persistent Log Files
 
@@ -649,7 +674,9 @@ logs:
 
 Log files are automatically rotated when they reach `max_size_mb` (default: 10 MB). Old files are kept up to `backup_count` (default: 5).
 
-**Note:** Log level changes via MQTT (`libmbus2mqtt/command/log_level`) are not persisted - they reset to the config value on restart. To permanently change the log level, edit `logs.level` in your config file.
+> [!NOTE]
+> Log level changes via MQTT (`libmbus2mqtt/command/log_level`) are not persisted - they reset to the config value on restart. To permanently change the log level, edit `logs.level` in your config file.
+> Also, make sure the data/ directory is writable by libmbus2mqtt user if using Docker
 
 ---
 
@@ -682,10 +709,6 @@ Data Sheet: https://pim.zenner.com/wp-content/uploads/documents/data_sheets/AMR_
 If your device isn't listed, libmbus2mqtt should still work - it creates generic sensors for all data records. For a better experience, you can [create a custom template](#custom-templates) or [request one](https://github.com/nilvanis/libmbus2mqtt/issues).
 
 ---
-
-## License
-
-This project is open source. See the LICENSE file for details.
 
 ## Contributing
 
