@@ -73,8 +73,8 @@ RUN useradd -r -s /bin/false libmbus2mqtt && \
     chown -R libmbus2mqtt:libmbus2mqtt /data
 USER libmbus2mqtt
 
-# Create config.yaml on first run if it doesn't exist
-RUN libmbus2mqtt init --config /data/config/config.yaml
+# Create config.yaml during build so the image has a ready-to-edit config
+RUN libmbus2mqtt config init --config /data/config/config.yaml
 
 # Run the application
 ENTRYPOINT ["libmbus2mqtt"]
