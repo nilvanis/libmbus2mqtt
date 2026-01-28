@@ -198,7 +198,9 @@ class TestPublishBridgeDiscovery:
         assert len(calls) > 0
 
         # Check for specific sensors
-        object_ids = [c.kwargs.get("object_id", c.args[1] if len(c.args) > 1 else None) for c in calls]
+        object_ids = [
+            c.kwargs.get("object_id", c.args[1] if len(c.args) > 1 else None) for c in calls
+        ]
         expected_sensors = [
             f"{BRIDGE_DEVICE_ID}_discovered_devices",
             f"{BRIDGE_DEVICE_ID}_online_devices",
@@ -383,6 +385,7 @@ class TestPublishDeviceDiscovery:
         assert cfg["enabled_by_default"] is False
         assert cfg["suggested_display_precision"] == 2
         assert cfg["icon"] == "mdi:test-tube"
+
 
 class TestRemoveAllDiscovery:
     """Tests for remove_all_discovery method."""

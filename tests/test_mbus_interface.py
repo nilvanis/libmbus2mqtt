@@ -421,9 +421,7 @@ class TestMbusInterfacePoll:
     ) -> None:
         """Test poll returns None when parsing fails."""
         mock_run = MagicMock()
-        mock_run.return_value = MagicMock(
-            stdout="invalid xml", stderr="", returncode=0
-        )
+        mock_run.return_value = MagicMock(stdout="invalid xml", stderr="", returncode=0)
         monkeypatch.setattr(subprocess, "run", mock_run)
 
         result = interface.poll(1)

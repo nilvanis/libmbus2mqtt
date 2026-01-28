@@ -176,7 +176,9 @@ def device_info(
     except FileNotFoundError:
         console.print(f"[red]Error:[/red] Configuration file not found: {config_path}")
         console.print(f"Run '[bold]{APP_NAME} config init[/bold]' to create one.")
-        console.print("\n[yellow]Note:[/yellow] mbus.device must be configured before using this command.")
+        console.print(
+            "\n[yellow]Note:[/yellow] mbus.device must be configured before using this command."
+        )
         raise typer.Exit(1) from None
     except Exception as e:
         console.print(f"[red]Error loading configuration:[/red] {e}")
@@ -214,7 +216,9 @@ def device_info(
                     console.print(f"USB Product: {usb_info['product']}")
 
             if info.get("is_busy"):
-                console.print("[yellow]Warning:    Device may be in use by another process[/yellow]")
+                console.print(
+                    "[yellow]Warning:    Device may be in use by another process[/yellow]"
+                )
 
         console.print(f"Baudrate:   {baudrate} (configured)")
     else:
@@ -311,7 +315,9 @@ def install(
     console.print(f"Creating {SERVICE_DATA_DIR}...")
     if dry_run:
         run_command(["mkdir", "-p", str(SERVICE_DATA_DIR)], dry_run=True)
-        run_command(["chown", f"{SERVICE_USER}:{SERVICE_GROUP}", str(SERVICE_DATA_DIR)], dry_run=True)
+        run_command(
+            ["chown", f"{SERVICE_USER}:{SERVICE_GROUP}", str(SERVICE_DATA_DIR)], dry_run=True
+        )
     else:
         SERVICE_DATA_DIR.mkdir(parents=True, exist_ok=True)
         shutil.chown(SERVICE_DATA_DIR, user=SERVICE_USER, group=SERVICE_GROUP)
@@ -357,9 +363,15 @@ def install(
         console.print(
             f"  1. Create config: [bold]sudo libmbus2mqtt config init -c {SERVICE_CONFIG_DIR / 'config.yaml'}[/bold]"
         )
-        console.print(f"  2. Edit config:   [bold]sudo nano {SERVICE_CONFIG_DIR / 'config.yaml'}[/bold]")
-        console.print(f"  3. Start service: [bold]sudo systemctl start {SYSTEMD_SERVICE_NAME}[/bold]")
-        console.print(f"  4. Check status:  [bold]sudo systemctl status {SYSTEMD_SERVICE_NAME}[/bold]")
+        console.print(
+            f"  2. Edit config:   [bold]sudo nano {SERVICE_CONFIG_DIR / 'config.yaml'}[/bold]"
+        )
+        console.print(
+            f"  3. Start service: [bold]sudo systemctl start {SYSTEMD_SERVICE_NAME}[/bold]"
+        )
+        console.print(
+            f"  4. Check status:  [bold]sudo systemctl status {SYSTEMD_SERVICE_NAME}[/bold]"
+        )
 
 
 def _find_service_file() -> Path | None:
@@ -444,7 +456,9 @@ def uninstall(
 
     console.print()
 
-    warning = "[red]WARNING: --purge will delete all configuration and data![/red]\n" if purge else ""
+    warning = (
+        "[red]WARNING: --purge will delete all configuration and data![/red]\n" if purge else ""
+    )
     if not confirm_action(f"{warning}Proceed with uninstallation?", default=False, yes=yes):
         console.print("[yellow]Uninstallation cancelled[/yellow]")
         raise typer.Exit(0)
@@ -815,7 +829,9 @@ def libmbus_install(
     if not all_found and not dry_run:
         console.print()
         console.print("[yellow]Warning:[/yellow] Some binaries were not found in expected location")
-        console.print("They may be installed in a different path. Check with: [bold]which mbus-serial-scan[/bold]")
+        console.print(
+            "They may be installed in a different path. Check with: [bold]which mbus-serial-scan[/bold]"
+        )
 
     # Cleanup
     if not keep_build and not dry_run:

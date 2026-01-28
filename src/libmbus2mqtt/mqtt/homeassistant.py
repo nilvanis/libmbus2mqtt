@@ -324,7 +324,9 @@ class HomeAssistantDiscovery:
             )
             self._published_entities.add(f"sensor/{object_id}")
 
-    def _build_device_availability_list(self, device_availability_topic: str) -> list[dict[str, str]]:
+    def _build_device_availability_list(
+        self, device_availability_topic: str
+    ) -> list[dict[str, str]]:
         """Build HA availability list combining bridge and device availability topics."""
         return [
             {

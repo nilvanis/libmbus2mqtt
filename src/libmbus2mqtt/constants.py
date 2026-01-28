@@ -20,7 +20,9 @@ MBUS_DEFAULT_BAUDRATE = 2400
 MBUS_DEFAULT_TIMEOUT = 5
 MBUS_DEFAULT_RETRY_COUNT = 3
 MBUS_DEFAULT_RETRY_DELAY = 1
-MBUS_DEFAULT_SCAN_TIMEOUT = 1200  # TCP scan with default 4s timeout takes 17-18minutes for full range
+MBUS_DEFAULT_SCAN_TIMEOUT = (
+    1200  # TCP scan with default 4s timeout takes 17-18minutes for full range
+)
 
 # MQTT
 MQTT_DEFAULT_PORT = 1883

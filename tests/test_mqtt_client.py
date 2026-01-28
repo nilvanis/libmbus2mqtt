@@ -138,9 +138,7 @@ class TestMqttClientConnection:
 
         # Should set will for bridge state topic
         will_topic = TOPIC_BRIDGE_STATE.format(base=client.base_topic)
-        mock_instance.will_set.assert_called_once_with(
-            will_topic, "offline", qos=1, retain=True
-        )
+        mock_instance.will_set.assert_called_once_with(will_topic, "offline", qos=1, retain=True)
 
     @patch("libmbus2mqtt.mqtt.client.mqtt.Client")
     def test_connect_timeout_raises_error(
@@ -238,9 +236,7 @@ class TestMqttClientPublish:
         call_args = connected_client._client.publish.call_args
         assert call_args[1]["qos"] == 2
 
-    def test_publish_when_not_connected_returns_false(
-        self, mqtt_config: MqttConfig
-    ) -> None:
+    def test_publish_when_not_connected_returns_false(self, mqtt_config: MqttConfig) -> None:
         """Test publish returns False when not connected."""
         client = MqttClient(mqtt_config)
         result = client.publish("test/topic", "hello")
@@ -291,9 +287,7 @@ class TestMqttClientPublishHelpers:
         connected_client.publish_device_availability("device123", "online")
 
         call_args = connected_client._client.publish.call_args
-        expected_topic = TOPIC_DEVICE_AVAILABILITY.format(
-            base="test", device_id="device123"
-        )
+        expected_topic = TOPIC_DEVICE_AVAILABILITY.format(base="test", device_id="device123")
         assert call_args[0][0] == expected_topic
         assert call_args[0][1] == "online"
         assert call_args[1]["retain"] is True
@@ -312,9 +306,7 @@ class TestMqttClientPublishHelpers:
         assert call_args[0][0] == "homeassistant/sensor/test_sensor/config"
         assert call_args[1]["retain"] is True
 
-    def test_publish_ha_discovery_custom_prefix(
-        self, connected_client: MqttClient
-    ) -> None:
+    def test_publish_ha_discovery_custom_prefix(self, connected_client: MqttClient) -> None:
         """Test publish_ha_discovery with custom prefix."""
         config = {"name": "Test Sensor"}
         connected_client.publish_ha_discovery(
@@ -457,9 +449,7 @@ class TestMqttClientInternalCallbacks:
 
         user_callback.assert_called_once()
 
-    def test_on_connect_failure_does_not_set_connected(
-        self, client: MqttClient
-    ) -> None:
+    def test_on_connect_failure_does_not_set_connected(self, client: MqttClient) -> None:
         """Test _on_connect failure does not set connected flag."""
         mock_reason_code = MagicMock()
         mock_reason_code.value = 1  # Error
@@ -477,9 +467,7 @@ class TestMqttClientInternalCallbacks:
 
         assert client.is_connected is False
 
-    def test_on_disconnect_calls_user_callback_on_unexpected(
-        self, client: MqttClient
-    ) -> None:
+    def test_on_disconnect_calls_user_callback_on_unexpected(self, client: MqttClient) -> None:
         """Test _on_disconnect calls user callback on unexpected disconnect."""
         user_callback = MagicMock()
         client.on_disconnect(user_callback)
@@ -490,9 +478,7 @@ class TestMqttClientInternalCallbacks:
 
         user_callback.assert_called_once()
 
-    def test_on_disconnect_does_not_call_callback_on_intentional(
-        self, client: MqttClient
-    ) -> None:
+    def test_on_disconnect_does_not_call_callback_on_intentional(self, client: MqttClient) -> None:
         """Test _on_disconnect does not call callback on intentional disconnect."""
         user_callback = MagicMock()
         client.on_disconnect(user_callback)
