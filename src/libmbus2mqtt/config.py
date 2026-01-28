@@ -93,9 +93,10 @@ def _set_nested(data: dict[str, Any], path: EnvPath, value: Any) -> None:
 
 def _merge_env_with_config(config_dict: dict[str, Any]) -> dict[str, Any]:
     """
-    Apply environment values only where config.yaml does not set a value.
+    Apply environment values with precedence over config.yaml.
 
-    Emits a warning when both env and config provide the same field.
+    If both env and config provide the same field, the env value wins and the
+    override is logged at INFO level for visibility.
     """
     merged = deepcopy(config_dict)
     logger = logging.getLogger("libmbus2mqtt.config")
@@ -108,13 +109,13 @@ def _merge_env_with_config(config_dict: dict[str, Any]) -> dict[str, Any]:
         exists, existing_value = _get_nested(merged, path)
 
         if exists:
-            logger.warning(
-                "Ignoring env %s; config file sets %s (using config value: %s)",
+            logger.info(
+                "Env %s overrides config %s (config=%s, env=%s)",
                 env_var,
                 ".".join(path),
                 existing_value,
+                env_value,
             )
-            continue
 
         _set_nested(merged, path, env_value)
 
