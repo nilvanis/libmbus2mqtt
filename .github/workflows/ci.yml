@@ -26,8 +26,8 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      - name: Install dependencies
-        run: uv sync --dev
+      - name: Install dependencies (including dev extras)
+        run: uv sync --dev --extra dev
 
       - name: Run ruff check
         run: uv run ruff check src tests
@@ -50,8 +50,8 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      - name: Install dependencies
-        run: uv sync --dev
+      - name: Install dependencies (including dev extras)
+        run: uv sync --dev --extra dev
 
       - name: Run mypy
         run: uv run mypy src
@@ -75,8 +75,8 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Install dependencies
-        run: uv sync --dev
+      - name: Install dependencies (including dev extras)
+        run: uv sync --dev --extra dev
 
       - name: Run tests
         run: uv run pytest --cov=src/libmbus2mqtt --cov-report=term-missing

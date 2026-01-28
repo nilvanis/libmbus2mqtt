@@ -25,8 +25,8 @@ jobs:
       - name: Set up Python
         run: uv python install 3.11
 
-      - name: Export requirements
-        run: uv export --no-dev --format requirements-txt > requirements.txt
+      - name: Export requirements (no hashes to allow local editable)
+        run: uv export --no-dev --format requirements-txt --no-hashes > requirements.txt
 
       - name: Run pip-audit
         uses: pypa/gh-action-pip-audit@v1.1.0
