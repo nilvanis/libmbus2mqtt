@@ -19,7 +19,7 @@ A clear and concise description of what the bug is.
 Name, link or photo
 
 **DEBUG log**
-A clear and concise description of what you expected to happen.
+Change log level to DEBUG and paste here the contents of last run where the problem is.
 
 **hardware used**
 What M-Bus master and server you are using.\
