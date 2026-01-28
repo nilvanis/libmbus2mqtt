@@ -15,6 +15,6 @@ services:
       # LIBMBUS2MQTT_MQTT_USERNAME: user
       # LIBMBUS2MQTT_MQTT_PASSWORD: password
       # LIBMBUS2MQTT_HOMEASSISTANT_ENABLED: "true"
-      TZ: ${TZ:-Europe/London}
+      TZ: Europe/London
     # Optional: connect to MQTT broker on host network
     # network_mode: host
