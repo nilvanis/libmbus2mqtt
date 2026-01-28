@@ -49,9 +49,7 @@ class MbusInterface:
 
     def _validate_libmbus(self) -> None:
         """Check if required libmbus binaries are available for the endpoint type."""
-        binaries = (
-            LIBMBUS_TCP_BINARIES if self.endpoint.type == "tcp" else LIBMBUS_SERIAL_BINARIES
-        )
+        binaries = LIBMBUS_TCP_BINARIES if self.endpoint.type == "tcp" else LIBMBUS_SERIAL_BINARIES
 
         for binary in binaries:
             binary_path = self.libmbus_path / binary

@@ -162,9 +162,9 @@ class TestTemplateContent:
             for sensor_id, sensor_config in template.items():
                 # All sensors should have name and value_template
                 assert "name" in sensor_config, f"{filename}[{sensor_id}] missing 'name'"
-                assert (
-                    "value_template" in sensor_config
-                ), f"{filename}[{sensor_id}] missing 'value_template'"
+                assert "value_template" in sensor_config, (
+                    f"{filename}[{sensor_id}] missing 'value_template'"
+                )
 
 
 # ============================================================================
@@ -195,9 +195,7 @@ class TestUserTemplates:
                 "value_template": "{{ value_json.user_sensor }}",
             }
         }
-        (user_templates_dir / "itron_cyble_1_4.json").write_text(
-            json.dumps(user_template)
-        )
+        (user_templates_dir / "itron_cyble_1_4.json").write_text(json.dumps(user_template))
 
         # Patch TEMPLATES_DIR to point to our temp dir
         monkeypatch.setattr(templates, "TEMPLATES_DIR", user_templates_dir)
@@ -224,9 +222,7 @@ class TestUserTemplates:
 
         # Create the template file
         user_template = {"0": {"name": "Custom", "value_template": "{{ value_json.x }}"}}
-        (user_templates_dir / "custom_device.json").write_text(
-            json.dumps(user_template)
-        )
+        (user_templates_dir / "custom_device.json").write_text(json.dumps(user_template))
 
         monkeypatch.setattr(templates, "TEMPLATES_DIR", user_templates_dir)
         clear_cache()
@@ -297,9 +293,7 @@ class TestUserTemplates:
         }
         (user_templates_dir / "index.json").write_text(json.dumps(user_index))
 
-        user_template = {
-            "0": {"name": "New Sensor", "value_template": "{{ value_json.new }}"}
-        }
+        user_template = {"0": {"name": "New Sensor", "value_template": "{{ value_json.new }}"}}
         (user_templates_dir / "new_meter.json").write_text(json.dumps(user_template))
 
         monkeypatch.setattr(templates, "TEMPLATES_DIR", user_templates_dir)
@@ -588,9 +582,7 @@ class TestNoIndexFound:
 
         # Patch both user and bundled paths to empty directories
         monkeypatch.setattr(templates, "TEMPLATES_DIR", empty_dir)
-        monkeypatch.setattr(
-            templates, "_get_bundled_templates_path", lambda: empty_dir
-        )
+        monkeypatch.setattr(templates, "_get_bundled_templates_path", lambda: empty_dir)
         clear_cache()
 
         # Should return None for any manufacturer

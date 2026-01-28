@@ -134,9 +134,7 @@ def load_template(filename: str) -> dict[str, Any] | None:
     return None
 
 
-def get_template_for_device(
-    manufacturer: str, product_name: str | None
-) -> dict[str, Any] | None:
+def get_template_for_device(manufacturer: str, product_name: str | None) -> dict[str, Any] | None:
     """
     Get template for a device by manufacturer and product name.
 
