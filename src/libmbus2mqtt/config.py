@@ -326,49 +326,53 @@ def generate_example_config() -> str:
     return """\
 # libmbus2mqtt configuration
 
-# M-Bus Interface (required: device)
+# M-Bus Interface
 mbus:
-  device: /dev/ttyUSB0          # Serial/TTY device path OR IPv4:port (e.g. 192.168.1.50:9999)
-  # baudrate: 2400              # Options: 300, 2400, 9600 (ignored for TCP)
+  device: /dev/ttyUSB0          # REQUIRED - Serial device path OR IPv4:port (TCP master)
+                                # Serial examples: /dev/ttyUSB0, /dev/ttyACM0, /dev/ttyAMA0
+                                # TCP example: 192.168.1.50:9999 (IPv4 only, no hostnames)
+  baudrate: 2400                # M-Bus baudrate (300, 2400, or 9600) - ignored for TCP
   poll_interval: 60             # Seconds between polling cycles
-  # startup_delay: 5            # Seconds to wait before first poll/scan
-  # timeout: 5                  # Seconds to wait for device response
-  # retry_count: 3              # Number of retries on failure
-  # retry_delay: 1              # Seconds between retries
-  # autoscan: true              # Scan for devices on startup
+  startup_delay: 5              # Seconds to wait before first poll/scan
+  timeout: 5                    # Seconds to wait for device response
+  retry_count: 3                # Number of retries on failure
+  retry_delay: 1                # Seconds between retries
+  autoscan: true                # Scan for devices on startup
 
-# MQTT Broker (required: host)
+# MQTT Broker
 mqtt:
-  host: localhost
-  # port: 1883
-  # username: null
-  # password: null
-  # client_id: null             # Auto-generated if not set
-  # keepalive: 60
-  # qos: 1
-  # base_topic: libmbus2mqtt
+  host: 192.168.1.100           # REQUIRED - Broker IP or hostname
+  port: 1883                    # Broker port
+#  username:                     # Username (if required)
+#  password:                     # Password (if required)
+  client_id: libmbus2mqtt       # Client ID (auto-generated if empty)
+  keepalive: 60                 # Connection keepalive in seconds
+  qos: 1                        # Message quality of service (0, 1, or 2)
+  base_topic: libmbus2mqtt      # Base MQTT topic
 
 # Home Assistant Integration
 homeassistant:
-  enabled: false
-  # discovery_prefix: homeassistant
+  enabled: true                # Enable Home Assistant MQTT Discovery
+  discovery_prefix: homeassistant
 
-# Devices (optional - auto-discovered if autoscan=true)
-# devices:
-#   - id: 1
-#     name: "Water Meter"
-#     enabled: true
-#     template: null            # Auto-detect
+# Devices (optional)
+# Must be defined if 'mbus' -> 'autoscan' is set to 'false')
+# Can be also used as override for specific devices
+#devices:
+#  - id: 1                       # M-Bus address (0-254)
+#    name: "Water Meter Kitchen" # Friendly name
+#    enabled: true               # Set false to ignore this device
+#    template:                   # Template name (auto-detect if empty)
 
 # Device Availability
 availability:
-  timeout_polls: 3              # Consecutive failures before offline
+  timeout_polls: 3              # Consecutive failures before marking offline
 
 # Logging
 logs:
-  level: INFO                   # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  save_to_file: false           # Enable file logging
-  # file: data/log/libmbus2mqtt.log  # Log file path
-  # max_size_mb: 10             # Max file size before rotation (1-1000)
-  # backup_count: 5             # Number of backup files to keep (0-100)
+  level: INFO                   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  save_to_file: true           # Enable file logging
+  file: data/log/libmbus2mqtt.log  # Log file path
+  max_size_mb: 10               # Max file size before rotation (1-1000 MB)
+  backup_count: 5               # Number of rotated backup files (0-100)
 """
