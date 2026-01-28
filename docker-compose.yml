@@ -1,0 +1,12 @@
+services:
+  libmbus2mqtt:
+    image: nilvanis/libmbus2mqtt:latest
+    container_name: libmbus2mqtt
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    devices:
+      # Change this to match your M-Bus adapter
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    environment:
+      TZ: Europe/Warsaw
