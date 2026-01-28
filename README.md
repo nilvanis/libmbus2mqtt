@@ -300,11 +300,11 @@ logs:
 
 ### Environment Variables
 
-Environment variables can be used to provide config values (handy in Docker). When both the YAML file and an environment variable set the same field, the YAML value is used and a warning is logged.
+Environment variables can be used to provide config values (handy in Docker). When both the YAML file and an environment variable set the same field, the **environment variable takes precedence** and the override is logged.
 
 | ENV VAR | DEFAULT |
 | --- | --- |
-| LIBMBUS2MQTT_MBUS_DEVICE | /dev/ttyAMA0 |
+| LIBMBUS2MQTT_MBUS_DEVICE | |
 | LIBMBUS2MQTT_MBUS_BAUDRATE | 2400 |
 | LIBMBUS2MQTT_MBUS_POLL_INTERVAL | 60 |
 | LIBMBUS2MQTT_MBUS_STARTUP_DELAY | 5 |
@@ -316,7 +316,7 @@ Environment variables can be used to provide config values (handy in Docker). Wh
 | LIBMBUS2MQTT_MQTT_PORT | 1883 |
 | LIBMBUS2MQTT_MQTT_USERNAME | myuser |
 | LIBMBUS2MQTT_MQTT_PASSWORD | mypassword |
-| LIBMBUS2MQTT_MQTT_CLIENT_ID | libmbus2mqtt |
+| LIBMBUS2MQTT_MQTT_CLIENT_ID | libmbus2mqtt-`generated_id` |
 | LIBMBUS2MQTT_MQTT_KEEPALIVE | 60 |
 | LIBMBUS2MQTT_MQTT_QOS | 1 |
 | LIBMBUS2MQTT_MQTT_BASE_TOPIC | libmbus2mqtt |
