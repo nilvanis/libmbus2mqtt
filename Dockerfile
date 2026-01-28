@@ -21,7 +21,7 @@ RUN git clone --depth 1 https://github.com/rscada/libmbus.git && \
     make install DESTDIR=/install
 
 # Stage 2: Build Python package
-FROM python:3.11-slim-bookworm AS python-builder
+FROM python:3.14-slim-bookworm AS python-builder
 
 WORKDIR /app
 
@@ -36,7 +36,7 @@ COPY src/ ./src/
 RUN uv build --wheel
 
 # Stage 3: Runtime image
-FROM python:3.11-slim-bookworm
+FROM python:3.14-slim-bookworm
 
 # Labels
 LABEL org.opencontainers.image.title="libmbus2mqtt"
