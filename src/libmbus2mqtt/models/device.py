@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 from libmbus2mqtt.models.mbus import MbusData
 
 
-class AvailabilityStatus(str, Enum):
+class AvailabilityStatus(StrEnum):
     """Device availability status."""
 
     ONLINE = "online"
@@ -76,10 +76,14 @@ class Device(BaseModel):
     # Runtime state
     mbus_data: MbusData | None = Field(default=None, exclude=True)
     availability: DeviceAvailability = Field(default_factory=DeviceAvailability)
+    identity_key: str | None = Field(default=None, exclude=True)
 
     # Home Assistant state
     ha_template: dict[str, dict[str, str]] | None = Field(default=None, exclude=True)
     ha_discovery_published: bool = Field(default=False, exclude=True)
+    current_template_name: str | None = Field(default=None, exclude=True)
+    current_template_mode: str = Field(default="generic", exclude=True)
+    current_template_source: str = Field(default="generic", exclude=True)
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -88,7 +92,7 @@ class Device(BaseModel):
         self.mbus_data = data
         self.identifier = data.device_id
         self.manufacturer = data.manufacturer
-        self.model = data.product_name
+        self.model = data.raw_product_name
         self.medium = data.medium
         self.version = data.version
         self.serial_number = data.serial_number
@@ -113,3 +117,17 @@ class Device(BaseModel):
     def is_online(self) -> bool:
         """Check if device is online."""
         return self.availability.status == AvailabilityStatus.ONLINE
+
+    @property
+    def datarecord_count(self) -> int:
+        """Get the number of DataRecord items in the current payload."""
+        if self.mbus_data is None:
+            return 0
+        return self.mbus_data.datarecord_count
+
+    @property
+    def identity_tuple(self) -> tuple[str, str, str] | None:
+        """Get the raw identity tuple used for replacement tracking."""
+        if self.manufacturer is None:
+            return None
+        return (self.object_id, self.manufacturer, self.model or "")

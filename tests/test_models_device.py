@@ -265,6 +265,18 @@ class TestDevice:
 
         assert device.model == "Itron CYBLE M-Bus 1.4"
 
+    def test_datarecord_count_from_mbus_data(self, apator_mbus_data: MbusData) -> None:
+        """Test datarecord_count reflects current payload."""
+        device = Device(address=1)
+        device.update_from_mbus_data(apator_mbus_data)
+        assert device.datarecord_count == 12
+
+    def test_identity_tuple_uses_object_id_manufacturer_and_model(self, itron_mbus_data: MbusData) -> None:
+        """Test identity tuple is built from raw device identity fields."""
+        device = Device(address=1)
+        device.update_from_mbus_data(itron_mbus_data)
+        assert device.identity_tuple == ("90000001", "ACW", "Itron CYBLE M-Bus 1.4")
+
     def test_availability_default_factory(self) -> None:
         """Test availability is created with default factory."""
         device = Device(address=1)

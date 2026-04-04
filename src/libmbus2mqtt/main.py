@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import signal
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from libmbus2mqtt.constants import APP_VERSION
@@ -16,11 +17,22 @@ from libmbus2mqtt.mqtt import (
     HomeAssistantDiscovery,
     MqttClient,
 )
+from libmbus2mqtt.state import StateStore, build_identity_key, utcnow_iso
 
 if TYPE_CHECKING:
     from libmbus2mqtt.config import AppConfig
 
 logger = get_logger("main")
+
+
+@dataclass(frozen=True)
+class DeviceSyncResult:
+    """Outcome of syncing a polled device with persisted runtime state."""
+
+    should_publish_discovery: bool
+    renamed: bool = False
+    template_rematched: bool = False
+    identity_changed: bool = False
 
 
 class Daemon:
@@ -38,6 +50,7 @@ class Daemon:
         self._ha_discovery: HomeAssistantDiscovery | None = None
         self._bridge_info: BridgeInfo | None = None
         self._command_handler: CommandHandler | None = None
+        self._state_store: StateStore | None = None
 
         # Device registry
         self._devices: dict[int, Device] = {}
@@ -57,6 +70,9 @@ class Daemon:
         signal.signal(signal.SIGINT, self._signal_handler)
 
         try:
+            # Initialize state store
+            self._init_state_store()
+
             # Initialize M-Bus interface
             self._init_mbus()
 
@@ -115,6 +131,10 @@ class Daemon:
                 self._mbus.baudrate,
             )
 
+    def _init_state_store(self) -> None:
+        """Initialize persistent runtime state."""
+        self._state_store = StateStore()
+
     def _init_mqtt(self) -> None:
         """Initialize MQTT client and related components."""
         logger.info("Connecting to MQTT broker...")
@@ -139,6 +159,7 @@ class Daemon:
             self._ha_discovery = HomeAssistantDiscovery(
                 self._mqtt,
                 self.config.homeassistant,
+                self._state_store,
             )
 
     def _init_devices(self) -> None:
@@ -187,8 +208,13 @@ class Daemon:
 
         # Publish device discovery for known devices
         for device in self._devices.values():
-            if device.enabled and device.mbus_data:
+            if device.enabled and device.mbus_data and self._is_current_binding(device):
                 self._publish_device_discovery(device)
+                if device.availability.status != AvailabilityStatus.UNKNOWN and self._mqtt is not None:
+                    self._mqtt.publish_device_availability(
+                        device.object_id,
+                        device.availability.status.value,
+                    )
 
     def _on_mqtt_disconnect(self) -> None:
         """Handle MQTT disconnection."""
@@ -244,6 +270,7 @@ class Daemon:
             if not device.enabled:
                 continue
 
+            sync_result = DeviceSyncResult(should_publish_discovery=False)
             mbus_data = self._mbus.poll(
                 device.address,
                 timeout=self.config.mbus.timeout,
@@ -253,12 +280,16 @@ class Daemon:
                 # Update device with new data
                 first_data = device.mbus_data is None
                 device.update_from_mbus_data(mbus_data)
+                sync_result = self._sync_device_runtime_state(device, first_data)
                 device.availability.poll_success()
                 online_count += 1
 
-                # Publish HA discovery on first successful poll
-                if first_data and self._ha_discovery:
+                if sync_result.should_publish_discovery and self._ha_discovery:
                     self._publish_device_discovery(device)
+                else:
+                    self._restore_binding_template_metadata(device)
+
+                self._persist_address_binding(device)
 
                 # Publish state
                 state: dict[str, Any]
@@ -277,11 +308,18 @@ class Daemon:
                 )
 
             # Publish availability if changed
-            if device.availability.status_changed:
+            force_publish_availability = mbus_data is not None and sync_result.identity_changed
+            if (
+                self._mqtt is not None
+                and self._is_current_binding(device)
+                and (force_publish_availability or device.availability.status_changed)
+            ):
                 self._mqtt.publish_device_availability(
                     device.object_id,
                     device.availability.status.value,
                 )
+                device.availability.reset_changed_flag()
+            elif device.availability.status_changed:
                 device.availability.reset_changed_flag()
 
         if self._bridge_info:
@@ -291,6 +329,195 @@ class Daemon:
         """Publish HA discovery for a device."""
         if self._ha_discovery and device.mbus_data:
             self._ha_discovery.publish_device_discovery(device)
+
+    def _sync_device_runtime_state(self, device: Device, first_data: bool) -> DeviceSyncResult:
+        """Sync runtime device state with the persistent SQLite store."""
+        if self._state_store is None or self._mqtt is None:
+            return DeviceSyncResult(should_publish_discovery=first_data)
+
+        identity_tuple = device.identity_tuple
+        if identity_tuple is None:
+            return DeviceSyncResult(should_publish_discovery=first_data)
+
+        object_id, manufacturer, model = identity_tuple
+        identity_key = build_identity_key(object_id, manufacturer, model)
+        device.identity_key = identity_key
+
+        timestamp = utcnow_iso()
+        binding = self._state_store.get_address_binding(device.address)
+        current_identity = self._state_store.get_identity(identity_key)
+        published_name = device.display_name
+
+        if binding is None:
+            event_type = "bootstrap"
+            if current_identity is not None:
+                event_type = "reactivate" if current_identity.status == "replaced" else "activate"
+            self._state_store.upsert_identity(
+                identity_key=identity_key,
+                object_id=object_id,
+                manufacturer=manufacturer,
+                model=model,
+                status="active",
+                last_address=device.address,
+                increment_activation=current_identity is None or current_identity.status != "active",
+                seen_at=timestamp,
+            )
+            self._state_store.record_event(
+                address=device.address,
+                event_type=event_type,
+                to_identity_key=identity_key,
+                details={"datarecord_count": device.datarecord_count},
+                created_at=timestamp,
+            )
+            return DeviceSyncResult(should_publish_discovery=True, identity_changed=not first_data)
+
+        if binding.identity_key != identity_key:
+            old_identity = self._state_store.get_identity(binding.identity_key)
+            if old_identity is not None:
+                self._state_store.set_identity_status(
+                    old_identity.identity_key,
+                    "replaced",
+                    last_address=device.address,
+                    seen_at=timestamp,
+                )
+                self._state_store.mark_entities_replaced(old_identity.identity_key, updated_at=timestamp)
+                replaced_name = f"{binding.published_device_name} (replaced)"
+                if self._ha_discovery:
+                    self._ha_discovery.publish_replaced_device(old_identity.identity_key, replaced_name)
+                self._mqtt.publish_device_availability(
+                    old_identity.object_id,
+                    AvailabilityStatus.OFFLINE.value,
+                )
+
+            event_type = "activate"
+            if current_identity is not None and current_identity.status == "replaced":
+                event_type = "reactivate"
+
+            self._state_store.upsert_identity(
+                identity_key=identity_key,
+                object_id=object_id,
+                manufacturer=manufacturer,
+                model=model,
+                status="active",
+                last_address=device.address,
+                increment_activation=current_identity is None or current_identity.status != "active",
+                seen_at=timestamp,
+            )
+            self._state_store.record_event(
+                address=device.address,
+                event_type="replace",
+                from_identity_key=binding.identity_key,
+                to_identity_key=identity_key,
+                details={"datarecord_count": device.datarecord_count},
+                created_at=timestamp,
+            )
+            self._state_store.record_event(
+                address=device.address,
+                event_type=event_type,
+                from_identity_key=binding.identity_key,
+                to_identity_key=identity_key,
+                details={"datarecord_count": device.datarecord_count},
+                created_at=timestamp,
+            )
+            return DeviceSyncResult(should_publish_discovery=True, identity_changed=True)
+
+        self._state_store.upsert_identity(
+            identity_key=identity_key,
+            object_id=object_id,
+            manufacturer=manufacturer,
+            model=model,
+            status="active",
+            last_address=device.address,
+            increment_activation=current_identity is None or current_identity.status != "active",
+            seen_at=timestamp,
+        )
+
+        renamed = binding.configured_name != device.name or binding.published_device_name != published_name
+        if renamed:
+            self._state_store.record_event(
+                address=device.address,
+                event_type="rename",
+                from_identity_key=identity_key,
+                to_identity_key=identity_key,
+                details={
+                    "configured_name": device.name,
+                    "published_device_name": published_name,
+                },
+                created_at=timestamp,
+            )
+
+        datarecord_count_changed = binding.datarecord_count != device.datarecord_count
+        template_rematched = False
+        if datarecord_count_changed:
+            if device.template_name:
+                logger.warning(
+                    "Device %s record count changed from %s to %s but explicit template %s is pinned",
+                    device.address,
+                    binding.datarecord_count,
+                    device.datarecord_count,
+                    device.template_name,
+                )
+            else:
+                template_rematched = True
+                self._state_store.record_event(
+                    address=device.address,
+                    event_type="template_rematch",
+                    from_identity_key=identity_key,
+                    to_identity_key=identity_key,
+                    details={
+                        "old_datarecord_count": binding.datarecord_count,
+                        "new_datarecord_count": device.datarecord_count,
+                    },
+                    created_at=timestamp,
+                )
+
+        return DeviceSyncResult(
+            should_publish_discovery=first_data or renamed or template_rematched,
+            renamed=renamed,
+            template_rematched=template_rematched,
+            identity_changed=False,
+        )
+
+    def _restore_binding_template_metadata(self, device: Device) -> None:
+        """Restore persisted template metadata when discovery is not republished."""
+        if self._state_store is None:
+            return
+
+        binding = self._state_store.get_address_binding(device.address)
+        if binding is None or binding.identity_key != device.identity_key:
+            if device.template_name:
+                device.current_template_name = device.template_name
+                device.current_template_mode = "explicit"
+                device.current_template_source = "explicit"
+            return
+
+        device.current_template_name = binding.template_name
+        device.current_template_mode = binding.template_mode
+        device.current_template_source = binding.template_source
+
+    def _is_current_binding(self, device: Device) -> bool:
+        """Return whether the device still owns the active binding for its address."""
+        if self._state_store is None or device.identity_key is None:
+            return True
+
+        binding = self._state_store.get_address_binding(device.address)
+        return binding is not None and binding.identity_key == device.identity_key
+
+    def _persist_address_binding(self, device: Device) -> None:
+        """Persist the current active identity binding for an address."""
+        if self._state_store is None or device.identity_key is None:
+            return
+
+        self._state_store.upsert_address_binding(
+            address=device.address,
+            identity_key=device.identity_key,
+            configured_name=device.name,
+            published_device_name=device.display_name,
+            template_mode=device.current_template_mode,
+            template_name=device.current_template_name,
+            template_source=device.current_template_source,
+            datarecord_count=device.datarecord_count,
+        )
 
     def _update_bridge_info(self, loop_start: float) -> None:
         """Update and publish bridge info."""

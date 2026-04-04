@@ -265,7 +265,7 @@ devices:
   - id: 1                       # M-Bus address (0-254)
     name: "Water Meter Kitchen" # Friendly name
     enabled: true               # Set false to ignore this device
-    template:                   # Template name (auto-detect if empty)
+    template:                   # Template filename (skip auto-detect if set)
 
 # Device Availability
 availability:
@@ -404,6 +404,10 @@ Each discovered M-Bus meter appears as a separate device in Home Assistant, link
 1. **Device template** - If a template exists for your meter, entities are created with proper names, units, and icons
 2. **Generic fallback** - If no template exists, generic sensors are created for each data record
 
+If a different physical device appears later on the same M-Bus address, libmbus2mqtt marks the previous device as unavailable, renames it with ` (replaced)`, and activates the new device. If the original device comes back on that address later, the same identity is reused.
+
+If the same device starts returning a different number of `<DataRecord>` items, libmbus2mqtt rematches the template for that same device. Entities that are no longer present become unavailable and are reactivated if they return later.
+
 ### MQTT Topics
 
 Data is published to these MQTT topics:
@@ -411,8 +415,9 @@ Data is published to these MQTT topics:
 ```text
 libmbus2mqtt/bridge/state          # Bridge availability (online/offline)
 libmbus2mqtt/bridge/info           # Bridge status JSON
-libmbus2mqtt/device/{id}/state     # Device data JSON
-libmbus2mqtt/device/{id}/availability  # Device availability
+libmbus2mqtt/device/{device_id}/state     # Device data JSON
+libmbus2mqtt/device/{device_id}/availability  # Device availability
+libmbus2mqtt/device/{device_id}/entity/{entity_key}/availability  # Entity availability
 libmbus2mqtt/command/rescan        # Trigger rescan (send any message)
 libmbus2mqtt/command/log_level     # Change log level (DEBUG/INFO/WARNING/ERROR)
 libmbus2mqtt/command/poll_interval # Change poll interval (10-3600)
@@ -447,7 +452,8 @@ Maps device information to template files:
 {
     "my_custom_meter.json": {
         "Manufacturer": "ACME",
-        "ProductName": "Water Meter Pro"
+        "ProductName": "Water Meter Pro",
+        "DataRecordCount": 12
     }
 }
 ```
@@ -489,9 +495,20 @@ Since custom sensors does not have it's own DataRecord in libmbus xml output, va
 Common use case is creating dedicated sensors from data in Manufacturer Specific field value.
 
 Template lookup order:
-- libmbus2mqtt first checks `/data/templates/index.json` for a matching entry and template file.
-- If no match is found in the user index, it falls back to the bundled index/templates.
+- If `template` is set for a deive in `config.yaml`,libmbus2mqtt uses that exact template file and skips auto-matching.
+- Otherwise, libmbus2mqtt checks `/data/templates/index.json` first for user defined index/template.
+- If no match or no user-defined index at all, built-in templates are checked.
+- Within template index, matches are tried in this order:
+  1. `Manufacturer` + `ProductName` + `DataRecordCount`
+  2. `Manufacturer` + `ProductName`
+
+> [!NOTE]
+> - `DataRecordCount` is the number of `<DataRecord>` items in the libmbus XML return data.
+> - Only numbered template entries (`"0"`, `"1"`, ...) count toward `DataRecordCount`, `custom-*` **do not count**.
+
 This lets you add templates without blocking built-in ones; if you want to override a built-in, add a matching entry to your user index and provide the file in `/data/templates/`.
+
+If the same device later advertises a different `DataRecordCount`, libmbus2mqtt rematches the template for that device instead of creating a new Home Assistant device.
 
 ### Getting Your Device's Data Records
 
