@@ -422,9 +422,7 @@ class StateStore:
                 tuple(params),
             ).fetchall()
         return [
-            entity
-            for row in rows
-            if (entity := self._row_to_published_entity(row)) is not None
+            entity for row in rows if (entity := self._row_to_published_entity(row)) is not None
         ]
 
     def mark_entities_replaced(self, identity_key: str, *, updated_at: str | None = None) -> None:

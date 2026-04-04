@@ -122,7 +122,9 @@ def _find_template_in_index(
             continue
 
         if not isinstance(expected_count, int):
-            logger.warning("Ignoring template %s with invalid DataRecordCount=%r", filename, expected_count)
+            logger.warning(
+                "Ignoring template %s with invalid DataRecordCount=%r", filename, expected_count
+            )
             continue
 
         if data_record_count is None:
@@ -305,7 +307,9 @@ def resolve_template(
                 mode="explicit",
                 source="explicit",
             )
-        logger.warning("Explicit template %s could not be loaded, using generic discovery", explicit_filename)
+        logger.warning(
+            "Explicit template %s could not be loaded, using generic discovery", explicit_filename
+        )
         return TemplateSelection(filename=None, template=None, mode="generic", source="generic")
 
     if manufacturer is None:

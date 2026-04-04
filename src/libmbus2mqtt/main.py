@@ -210,7 +210,10 @@ class Daemon:
         for device in self._devices.values():
             if device.enabled and device.mbus_data and self._is_current_binding(device):
                 self._publish_device_discovery(device)
-                if device.availability.status != AvailabilityStatus.UNKNOWN and self._mqtt is not None:
+                if (
+                    device.availability.status != AvailabilityStatus.UNKNOWN
+                    and self._mqtt is not None
+                ):
                     self._mqtt.publish_device_availability(
                         device.object_id,
                         device.availability.status.value,
@@ -359,7 +362,8 @@ class Daemon:
                 model=model,
                 status="active",
                 last_address=device.address,
-                increment_activation=current_identity is None or current_identity.status != "active",
+                increment_activation=current_identity is None
+                or current_identity.status != "active",
                 seen_at=timestamp,
             )
             self._state_store.record_event(
@@ -380,10 +384,14 @@ class Daemon:
                     last_address=device.address,
                     seen_at=timestamp,
                 )
-                self._state_store.mark_entities_replaced(old_identity.identity_key, updated_at=timestamp)
+                self._state_store.mark_entities_replaced(
+                    old_identity.identity_key, updated_at=timestamp
+                )
                 replaced_name = f"{binding.published_device_name} (replaced)"
                 if self._ha_discovery:
-                    self._ha_discovery.publish_replaced_device(old_identity.identity_key, replaced_name)
+                    self._ha_discovery.publish_replaced_device(
+                        old_identity.identity_key, replaced_name
+                    )
                 self._mqtt.publish_device_availability(
                     old_identity.object_id,
                     AvailabilityStatus.OFFLINE.value,
@@ -400,7 +408,8 @@ class Daemon:
                 model=model,
                 status="active",
                 last_address=device.address,
-                increment_activation=current_identity is None or current_identity.status != "active",
+                increment_activation=current_identity is None
+                or current_identity.status != "active",
                 seen_at=timestamp,
             )
             self._state_store.record_event(
@@ -432,7 +441,10 @@ class Daemon:
             seen_at=timestamp,
         )
 
-        renamed = binding.configured_name != device.name or binding.published_device_name != published_name
+        renamed = (
+            binding.configured_name != device.name
+            or binding.published_device_name != published_name
+        )
         if renamed:
             self._state_store.record_event(
                 address=device.address,
