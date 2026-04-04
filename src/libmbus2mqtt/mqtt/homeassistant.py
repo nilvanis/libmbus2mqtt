@@ -244,14 +244,12 @@ class HomeAssistantDiscovery:
         """Publish entities defined in a device template."""
         published_entities: list[PublishedDeviceEntity] = []
         for entity_id, entity_config in template.items():
-            component = (
-                entity_config.get("component")
-                or entity_config.get("platform")
-                or "sensor"
-            )
+            component = entity_config.get("component") or entity_config.get("platform") or "sensor"
             object_id = f"{APP_NAME}_{device.object_id}_{entity_id}"
             discovery_topic = self._get_discovery_topic(component, object_id)
-            entity_availability_topic = self._get_entity_availability_topic(device.object_id, entity_id)
+            entity_availability_topic = self._get_entity_availability_topic(
+                device.object_id, entity_id
+            )
 
             config: dict[str, Any] = {
                 "name": entity_config.get("name", entity_id),
@@ -259,7 +257,9 @@ class HomeAssistantDiscovery:
                 "device": device_info,
                 "state_topic": state_topic,
                 "availability": availability
-                or self._build_device_availability_list(device.object_id, entity_availability_topic),
+                or self._build_device_availability_list(
+                    device.object_id, entity_availability_topic
+                ),
             }
 
             for key, value in entity_config.items():
@@ -315,7 +315,9 @@ class HomeAssistantDiscovery:
             entity_key = f"record_{record_key}" if record_key else f"func_{record.function}"
             object_id = f"{APP_NAME}_{device.object_id}_{entity_key}"
             discovery_topic = self._get_discovery_topic("sensor", object_id)
-            entity_availability_topic = self._get_entity_availability_topic(device.object_id, entity_key)
+            entity_availability_topic = self._get_entity_availability_topic(
+                device.object_id, entity_key
+            )
 
             config: dict[str, Any] = {
                 "name": record.function or f"Record {record_key}",
@@ -324,7 +326,9 @@ class HomeAssistantDiscovery:
                 "state_topic": state_topic,
                 "value_template": f"{{{{ value_json.records['{record_key}'].value }}}}",
                 "availability": availability
-                or self._build_device_availability_list(device.object_id, entity_availability_topic),
+                or self._build_device_availability_list(
+                    device.object_id, entity_availability_topic
+                ),
             }
 
             if record.unit:
@@ -469,7 +473,9 @@ class HomeAssistantDiscovery:
                 "payload_not_available": "offline",
             },
             {
-                "topic": TOPIC_DEVICE_AVAILABILITY.format(base=self.base_topic, device_id=device_id),
+                "topic": TOPIC_DEVICE_AVAILABILITY.format(
+                    base=self.base_topic, device_id=device_id
+                ),
                 "payload_available": "online",
                 "payload_not_available": "offline",
             },

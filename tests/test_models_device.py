@@ -271,7 +271,9 @@ class TestDevice:
         device.update_from_mbus_data(apator_mbus_data)
         assert device.datarecord_count == 12
 
-    def test_identity_tuple_uses_object_id_manufacturer_and_model(self, itron_mbus_data: MbusData) -> None:
+    def test_identity_tuple_uses_object_id_manufacturer_and_model(
+        self, itron_mbus_data: MbusData
+    ) -> None:
         """Test identity tuple is built from raw device identity fields."""
         device = Device(address=1)
         device.update_from_mbus_data(itron_mbus_data)

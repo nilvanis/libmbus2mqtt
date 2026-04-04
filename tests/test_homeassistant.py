@@ -501,7 +501,10 @@ class TestPersistentDiscoveryState:
         assert "homeassistant/sensor/libmbus2mqtt_123_0/config" in publish_topics
         assert "homeassistant/sensor/libmbus2mqtt_123_7/config" not in publish_topics
 
-        entities = {entity.entity_key: entity for entity in state_store.list_published_entities(identity_key)}
+        entities = {
+            entity.entity_key: entity
+            for entity in state_store.list_published_entities(identity_key)
+        }
         assert entities["0"].lifecycle_state == "replaced"
         assert entities["7"].lifecycle_state == "retired"
 
@@ -542,7 +545,10 @@ class TestPersistentDiscoveryState:
         mock_mqtt_client.reset_mock()
         discovery_with_state.publish_device_discovery(device)
 
-        entities = {entity.entity_key: entity for entity in state_store.list_published_entities(identity_key)}
+        entities = {
+            entity.entity_key: entity
+            for entity in state_store.list_published_entities(identity_key)
+        }
         assert entities["7"].lifecycle_state == "retired"
         assert entities["7"].frozen is True
         assert entities["6"].lifecycle_state == "active"
@@ -591,7 +597,11 @@ class TestPersistentDiscoveryState:
         device.identity_key = identity_key
         discovery_with_state.publish_device_discovery(device)
 
-        entities = [entity for entity in state_store.list_published_entities(identity_key) if entity.entity_key == "7"]
+        entities = [
+            entity
+            for entity in state_store.list_published_entities(identity_key)
+            if entity.entity_key == "7"
+        ]
         assert len(entities) == 1
         assert entities[0].lifecycle_state == "active"
         assert entities[0].frozen is False
