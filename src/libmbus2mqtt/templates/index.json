@@ -1,19 +1,28 @@
 
 {
-    "itron_cyble_1_4.json": {
+    "itron_cyble_1_4-dr8.json": {
         "Manufacturer": "ACW",
-        "ProductName": "Itron CYBLE M-Bus 1.4"
+        "ProductName": "Itron CYBLE M-Bus 1.4",
+        "DataRecordCount": 8
+    },
+    "itron_cyble_1_4-dr7.json": {
+        "Manufacturer": "ACW",
+        "ProductName": "Itron CYBLE M-Bus 1.4",
+        "DataRecordCount": 7
     },
     "apt-mbus-na-1.json": {
         "Manufacturer": "APA",
-        "ProductName": null
+        "ProductName": null,
+        "DataRecordCount": 12
     },
     "kamstrup_multical_401.json": {
         "Manufacturer": "KAM",
-        "ProductName": "Kamstrup 382 (6850-005)"
+        "ProductName": "Kamstrup 382 (6850-005)",
+        "DataRecordCount": 12
     },
     "zri.json": {
         "Manufacturer": "ZRI",
-        "ProductName": null
+        "ProductName": null,
+        "DataRecordCount": 18
     }
 }
