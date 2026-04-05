@@ -68,14 +68,14 @@
         "name": "FDR Day",
         "icon": "mdi:calendar-month-outline",
         "platform": "sensor",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[0] is match('^[0-9A-Fa-f]{2}$') %}{{ parts[0] | int(base=16) }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{{ parts[0] | int(base=16) if parts | length == 3 and parts[0] is match('^[0-9A-Fa-f]{2}$') else none }}",
         "entity_category": "diagnostic"
     },
     "custom-programming_counter": {
         "name": "Programming Counter",
         "icon": "mdi:sort-numeric-ascending-variant",
         "platform": "sensor",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[1] is match('^[0-9A-Fa-f]{2}$') %}{{ parts[1] | int(base=16) }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{{ parts[1] | int(base=16) if parts | length == 3 and parts[1] is match('^[0-9A-Fa-f]{2}$') else none }}",
         "entity_category": "diagnostic"
     },
     "custom-flag_0": {
@@ -84,34 +84,34 @@
         "device_class": "problem",
         "payload_on": "ON",
         "payload_off": "OFF",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'ON' if flags | bitwise_and(1) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(1) else 'OFF' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic"
     },
     "custom-flag_1": {
-        "name": "Leakage",
+        "name": "Leak",
         "component": "binary_sensor",
         "device_class": "problem",
         "payload_on": "ON",
         "payload_off": "OFF",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'ON' if flags | bitwise_and(2) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(2) else 'OFF' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic"
     },
     "custom-flag_2": {
-        "name": "Backflow Valid",
+        "name": "Backflow Alarm Valid",
         "component": "binary_sensor",
-        "icon": "mdi:playlist-check",
+        "icon": "mdi:alert-circle-check-outline",
         "payload_on": "ON",
         "payload_off": "OFF",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'ON' if flags | bitwise_and(4) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(4) else 'OFF' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic"
     },
     "custom-flag_3": {
-        "name": "Leakage Valid",
+        "name": "Leak Alarm Valid",
         "component": "binary_sensor",
-        "icon": "mdi:playlist-check",
+        "icon": "mdi:alert-circle-check-outline",
         "payload_on": "ON",
         "payload_off": "OFF",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'ON' if flags | bitwise_and(8) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(8) else 'OFF' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic"
     },
     "custom-flag_4": {
@@ -120,25 +120,25 @@
         "device_class": "tamper",
         "payload_on": "ON",
         "payload_off": "OFF",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'ON' if flags | bitwise_and(16) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(16) else 'OFF' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic"
     },
     "custom-flag_5": {
-        "name": "FDR Valid",
+        "name": "FDR Available",
         "component": "binary_sensor",
-        "icon": "mdi:playlist-check",
+        "icon": "mdi:calendar-check",
         "payload_on": "ON",
         "payload_off": "OFF",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'OFF' if flags | bitwise_and(32) else 'ON' }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'OFF' if (parts[2] | int(base=16)) | bitwise_and(32) else 'ON' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic"
     },
     "custom-flag_6": {
-        "name": "Flow Valid",
+        "name": "Flow Available",
         "component": "binary_sensor",
-        "icon": "mdi:playlist-check",
+        "icon": "mdi:water-check-outline",
         "payload_on": "ON",
         "payload_off": "OFF",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'OFF' if flags | bitwise_and(64) else 'ON' }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'OFF' if (parts[2] | int(base=16)) | bitwise_and(64) else 'ON' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic"
     },
     "custom-flag_7": {
@@ -147,7 +147,7 @@
         "icon": "mdi:radiobox-blank",
         "payload_on": "ON",
         "payload_off": "OFF",
-        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'ON' if flags | bitwise_and(128) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(128) else 'OFF' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic",
         "enabled_by_default": false
     }
