@@ -79,7 +79,7 @@
         "entity_category": "diagnostic"
     },
     "custom-flag_0": {
-        "name": "Backflow Since Last Readout",
+        "name": "Backflow",
         "component": "binary_sensor",
         "device_class": "problem",
         "payload_on": "ON",
@@ -88,7 +88,7 @@
         "entity_category": "diagnostic"
     },
     "custom-flag_1": {
-        "name": "Leak Since Last Readout",
+        "name": "Leakage",
         "component": "binary_sensor",
         "device_class": "problem",
         "payload_on": "ON",
@@ -97,18 +97,18 @@
         "entity_category": "diagnostic"
     },
     "custom-flag_2": {
-        "name": "Backflow Status Valid",
+        "name": "Backflow Valid",
         "component": "binary_sensor",
-        "device_class": "safety",
+        "icon": "mdi:playlist-check",
         "payload_on": "ON",
         "payload_off": "OFF",
         "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'ON' if flags | bitwise_and(4) else 'OFF' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic"
     },
     "custom-flag_3": {
-        "name": "Leak Status Valid",
+        "name": "Leakage Valid",
         "component": "binary_sensor",
-        "device_class": "safety",
+        "icon": "mdi:playlist-check",
         "payload_on": "ON",
         "payload_off": "OFF",
         "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'ON' if flags | bitwise_and(8) else 'OFF' }}{% else %}{{ none }}{% endif %}",
@@ -124,18 +124,18 @@
         "entity_category": "diagnostic"
     },
     "custom-flag_5": {
-        "name": "Fixed-Date Reading Option Valid",
+        "name": "FDR Valid",
         "component": "binary_sensor",
-        "device_class": "safety",
+        "icon": "mdi:playlist-check",
         "payload_on": "ON",
         "payload_off": "OFF",
         "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'OFF' if flags | bitwise_and(32) else 'ON' }}{% else %}{{ none }}{% endif %}",
         "entity_category": "diagnostic"
     },
     "custom-flag_6": {
-        "name": "Flow Option Valid",
+        "name": "Flow Valid",
         "component": "binary_sensor",
-        "device_class": "safety",
+        "icon": "mdi:playlist-check",
         "payload_on": "ON",
         "payload_off": "OFF",
         "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{% set flags = parts[2] | int(base=16) %}{{ 'OFF' if flags | bitwise_and(64) else 'ON' }}{% else %}{{ none }}{% endif %}",
