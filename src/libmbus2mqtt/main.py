@@ -193,6 +193,7 @@ class Daemon:
         if self._bridge_info:
             self._bridge_info.set_discovered_devices(len(self._devices))
             self._bridge_info.set_last_scan()
+            self._bridge_info.publish()
 
     def _on_mqtt_connect(self) -> None:
         """Handle MQTT connection established."""
