@@ -69,10 +69,6 @@ class BridgeInfo:
             self._last_scan = datetime.now(UTC)
             return
 
-        if timestamp.tzinfo is None:
-            self._last_scan = timestamp.replace(tzinfo=UTC)
-            return
-
         self._last_scan = timestamp.astimezone(UTC)
 
     def set_last_poll_duration(self, duration_ms: int) -> None:
