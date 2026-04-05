@@ -253,6 +253,41 @@ class TestPublishBridgeDiscovery:
         number_calls = [c for c in calls if c.kwargs.get("component") == "number"]
         assert len(number_calls) > 0
 
+    def test_last_scan_sensor_uses_timestamp_device_class(
+        self,
+        discovery: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+    ) -> None:
+        """Test Last Scan sensor is published as a timestamp sensor."""
+        discovery.publish_bridge_discovery()
+
+        last_scan_call = next(
+            call
+            for call in mock_mqtt_client.publish_ha_discovery.call_args_list
+            if call.kwargs.get("object_id") == f"{BRIDGE_DEVICE_ID}_last_scan"
+        )
+
+        config = last_scan_call.kwargs["config"]
+        assert config["device_class"] == "timestamp"
+        assert config["value_template"] == "{{ value_json.get('last_scan') }}"
+
+    def test_last_poll_duration_sensor_uses_safe_template(
+        self,
+        discovery: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+    ) -> None:
+        """Test Last Poll Duration sensor tolerates missing keys."""
+        discovery.publish_bridge_discovery()
+
+        duration_call = next(
+            call
+            for call in mock_mqtt_client.publish_ha_discovery.call_args_list
+            if call.kwargs.get("object_id") == f"{BRIDGE_DEVICE_ID}_last_poll_duration"
+        )
+
+        config = duration_call.kwargs["config"]
+        assert config["value_template"] == "{{ value_json.get('last_poll_duration_ms') }}"
+
     def test_disabled_does_not_publish(
         self,
         discovery_disabled: HomeAssistantDiscovery,

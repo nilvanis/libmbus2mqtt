@@ -264,3 +264,18 @@ class TestDaemonIdentitySync:
 
         daemon._ha_discovery.publish_device_discovery.assert_called_once_with(device_two)
         daemon._mqtt.publish_device_availability.assert_called_once_with("A1", "online")
+
+    def test_scan_publishes_bridge_info_immediately(
+        self,
+        daemon: Daemon,
+    ) -> None:
+        daemon._mbus = MagicMock()
+        daemon._mbus.scan.return_value = [3, 7]
+        daemon._bridge_info = MagicMock()
+
+        daemon._scan_devices()
+
+        assert sorted(daemon._devices) == [3, 7]
+        daemon._bridge_info.set_discovered_devices.assert_called_once_with(2)
+        daemon._bridge_info.set_last_scan.assert_called_once_with()
+        daemon._bridge_info.publish.assert_called_once_with()
