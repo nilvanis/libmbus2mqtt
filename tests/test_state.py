@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from unittest.mock import MagicMock, call
 
@@ -10,7 +11,7 @@ import pytest
 from libmbus2mqtt.main import Daemon
 from libmbus2mqtt.models.device import Device
 from libmbus2mqtt.models.mbus import DataRecord, MbusData, SlaveInformation
-from libmbus2mqtt.state import StateStore
+from libmbus2mqtt.state import StateStore, build_identity_key
 
 
 def make_mbus_data(
@@ -279,3 +280,116 @@ class TestDaemonIdentitySync:
         daemon._bridge_info.set_discovered_devices.assert_called_once_with(2)
         daemon._bridge_info.set_last_scan.assert_called_once_with()
         daemon._bridge_info.publish.assert_called_once_with()
+
+    def test_mqtt_connect_restores_cached_state_for_active_binding(
+        self,
+        daemon: Daemon,
+        state_store: StateStore,
+    ) -> None:
+        identity_key = build_identity_key("A1", "ACW", "Meter")
+        state_store.upsert_identity(
+            identity_key=identity_key,
+            object_id="A1",
+            manufacturer="ACW",
+            model="Meter",
+            status="active",
+            last_address=1,
+            increment_activation=True,
+        )
+        state_store.upsert_address_binding(
+            address=1,
+            identity_key=identity_key,
+            configured_name=None,
+            published_device_name="Water Meter",
+            template_mode="generic",
+            template_name=None,
+            template_source="generic",
+            datarecord_count=1,
+        )
+        state_store.upsert_device_snapshot(
+            identity_key=identity_key,
+            object_id="A1",
+            state={"total": 123},
+            availability="online",
+        )
+
+        daemon._mqtt.base_topic = "libmbus2mqtt"
+        daemon._bridge_info = MagicMock()
+
+        daemon._on_mqtt_connect()
+
+        daemon._mqtt.publish.assert_any_call(
+            "libmbus2mqtt/device/A1/state",
+            json.dumps({"total": 123}),
+            retain=True,
+        )
+        daemon._mqtt.publish_device_availability.assert_called_once_with("A1", "online")
+        daemon._ha_discovery.restore_active_device_discovery.assert_called_once_with(identity_key)
+
+    def test_mqtt_connect_republishes_live_device_state(
+        self,
+        daemon: Daemon,
+    ) -> None:
+        device = Device(address=1)
+        device.update_from_mbus_data(make_mbus_data(object_id="A1", record_count=7))
+        daemon._sync_device_runtime_state(device, first_data=True)
+        daemon._persist_address_binding(device)
+        device.availability.poll_success()
+        device.availability.reset_changed_flag()
+
+        daemon._devices[1] = device
+        daemon._bridge_info = MagicMock()
+        daemon._mqtt.base_topic = "libmbus2mqtt"
+
+        daemon._on_mqtt_connect()
+
+        assert device.mbus_data is not None
+        daemon._mqtt.publish_device_state.assert_called_once_with(
+            "A1",
+            device.mbus_data.to_generic_state(),
+        )
+        daemon._mqtt.publish_device_availability.assert_called_once_with("A1", "online")
+        daemon._ha_discovery.publish_device_discovery.assert_called_once_with(device)
+
+
+class TestDeviceSnapshots:
+    """Tests for persisted device snapshot state."""
+
+    def test_list_active_device_snapshots_returns_current_binding_only(
+        self,
+        state_store: StateStore,
+    ) -> None:
+        identity_key = build_identity_key("A1", "ACW", "Meter")
+        state_store.upsert_identity(
+            identity_key=identity_key,
+            object_id="A1",
+            manufacturer="ACW",
+            model="Meter",
+            status="active",
+            last_address=1,
+            increment_activation=True,
+        )
+        state_store.upsert_address_binding(
+            address=1,
+            identity_key=identity_key,
+            configured_name=None,
+            published_device_name="Water Meter",
+            template_mode="generic",
+            template_name=None,
+            template_source="generic",
+            datarecord_count=4,
+        )
+        state_store.upsert_device_snapshot(
+            identity_key=identity_key,
+            object_id="A1",
+            state={"total": 123},
+            availability="online",
+        )
+
+        snapshots = state_store.list_active_device_snapshots()
+
+        assert len(snapshots) == 1
+        assert snapshots[0].address == 1
+        assert snapshots[0].object_id == "A1"
+        assert snapshots[0].availability == "online"
+        assert snapshots[0].state == {"total": 123}

@@ -382,6 +382,20 @@ class HomeAssistantDiscovery:
             )
             self._published_entities.add(f"{entity.component}/{entity.discovery_object_id}")
 
+    def restore_active_device_discovery(self, identity_key: str) -> None:
+        """Republish retained discovery rows for the active identity binding."""
+        if self.state_store is None or not self.config.enabled:
+            return
+
+        for entity in self.state_store.list_published_entities(
+            identity_key,
+            lifecycle_states=("active",),
+        ):
+            if entity.entity_availability_topic:
+                self.mqtt.publish(entity.entity_availability_topic, "online", retain=True)
+            self.mqtt.publish(entity.discovery_topic, entity.config, retain=True)
+            self._published_entities.add(f"{entity.component}/{entity.discovery_object_id}")
+
     def _resolve_device_template(self, device: Device) -> TemplateSelection:
         """Resolve the template selection for a device."""
         selection = resolve_template(
