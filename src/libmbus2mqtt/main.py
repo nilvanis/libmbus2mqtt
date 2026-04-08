@@ -601,7 +601,9 @@ class Daemon:
             disabled_addresses = {
                 device.address for device in self._devices.values() if not device.enabled
             }
-            return [snapshot for snapshot in snapshots if snapshot.address not in disabled_addresses]
+            return [
+                snapshot for snapshot in snapshots if snapshot.address not in disabled_addresses
+            ]
 
         enabled_addresses = {device.address for device in self._devices.values() if device.enabled}
         return [snapshot for snapshot in snapshots if snapshot.address in enabled_addresses]
