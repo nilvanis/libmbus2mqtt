@@ -543,6 +543,56 @@ class TestPersistentDiscoveryState:
         assert entities["0"].lifecycle_state == "replaced"
         assert entities["7"].lifecycle_state == "retired"
 
+    def test_restore_active_device_discovery_republishes_active_entities(
+        self,
+        discovery_with_state: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+        state_store: StateStore,
+    ) -> None:
+        """Restore should republish active retained discovery and entity availability only."""
+        identity_key = build_identity_key("123", "ACW", "Meter")
+        state_store.upsert_identity(
+            identity_key=identity_key,
+            object_id="123",
+            manufacturer="ACW",
+            model="Meter",
+            status="active",
+            last_address=1,
+            increment_activation=True,
+        )
+        state_store.upsert_published_entity(
+            discovery_object_id="libmbus2mqtt_123_0",
+            identity_key=identity_key,
+            component="sensor",
+            entity_key="0",
+            discovery_topic="homeassistant/sensor/libmbus2mqtt_123_0/config",
+            entity_availability_topic="libmbus2mqtt/device/123/entity/0/availability",
+            config={"name": "Active", "device": {"name": "Water Meter"}},
+            lifecycle_state="active",
+            frozen=False,
+        )
+        state_store.upsert_published_entity(
+            discovery_object_id="libmbus2mqtt_123_7",
+            identity_key=identity_key,
+            component="sensor",
+            entity_key="7",
+            discovery_topic="homeassistant/sensor/libmbus2mqtt_123_7/config",
+            entity_availability_topic="libmbus2mqtt/device/123/entity/7/availability",
+            config={"name": "Retired", "device": {"name": "Water Meter"}},
+            lifecycle_state="retired",
+            frozen=True,
+        )
+
+        discovery_with_state.restore_active_device_discovery(identity_key)
+
+        publish_calls = mock_mqtt_client.publish.call_args_list
+        assert len(publish_calls) == 2
+        assert publish_calls[0].args == ("libmbus2mqtt/device/123/entity/0/availability", "online")
+        assert publish_calls[0].kwargs["retain"] is True
+        assert publish_calls[1].args[0] == "homeassistant/sensor/libmbus2mqtt_123_0/config"
+        assert publish_calls[1].args[1]["name"] == "Active"
+        assert publish_calls[1].kwargs["retain"] is True
+
     def test_template_rematch_retires_removed_entities(
         self,
         discovery_with_state: HomeAssistantDiscovery,

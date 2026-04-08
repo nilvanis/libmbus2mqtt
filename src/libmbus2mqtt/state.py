@@ -11,7 +11,7 @@ from typing import Any, cast
 
 from libmbus2mqtt.constants import DEFAULT_DB_FILE
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def utcnow_iso() -> str:
@@ -77,6 +77,23 @@ class PublishedEntityRecord:
         return cast(dict[str, Any], json.loads(self.config_json))
 
 
+@dataclass(frozen=True)
+class DeviceSnapshotRecord:
+    """Persisted last-known MQTT state for an active device identity."""
+
+    address: int
+    identity_key: str
+    object_id: str
+    state_json: str
+    availability: str
+    updated_at: str
+
+    @property
+    def state(self) -> dict[str, Any]:
+        """Decode the stored state payload."""
+        return cast(dict[str, Any], json.loads(self.state_json))
+
+
 class StateStore:
     """Persist daemon runtime state in SQLite."""
 
@@ -134,6 +151,14 @@ class StateStore:
                     published_at TEXT NOT NULL,
                     last_updated_at TEXT NOT NULL,
                     UNIQUE(identity_key, entity_key)
+                );
+
+                CREATE TABLE IF NOT EXISTS device_snapshot (
+                    identity_key TEXT PRIMARY KEY REFERENCES device_identity(identity_key),
+                    object_id TEXT NOT NULL,
+                    state_json TEXT NOT NULL,
+                    availability TEXT NOT NULL CHECK(availability IN ('online', 'offline', 'unknown')),
+                    updated_at TEXT NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS identity_event (
@@ -425,6 +450,85 @@ class StateStore:
             entity for row in rows if (entity := self._row_to_published_entity(row)) is not None
         ]
 
+    def upsert_device_snapshot(
+        self,
+        *,
+        identity_key: str,
+        object_id: str,
+        state: dict[str, Any],
+        availability: str,
+        updated_at: str | None = None,
+    ) -> DeviceSnapshotRecord:
+        """Insert or update the last-known retained payload for a device identity."""
+        timestamp = updated_at or utcnow_iso()
+        state_json = json.dumps(state)
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO device_snapshot (
+                    identity_key, object_id, state_json, availability, updated_at
+                ) VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(identity_key) DO UPDATE SET
+                    object_id = excluded.object_id,
+                    state_json = excluded.state_json,
+                    availability = excluded.availability,
+                    updated_at = excluded.updated_at
+                """,
+                (identity_key, object_id, state_json, availability, timestamp),
+            )
+            row = conn.execute(
+                """
+                SELECT address_binding.address, device_snapshot.*
+                FROM device_snapshot
+                JOIN address_binding ON address_binding.identity_key = device_snapshot.identity_key
+                WHERE device_snapshot.identity_key = ?
+                """,
+                (identity_key,),
+            ).fetchone()
+        if row is None:
+            msg = f"Device snapshot missing after upsert: {identity_key}"
+            raise RuntimeError(msg)
+        snapshot = self._row_to_snapshot(row)
+        if snapshot is None:
+            msg = f"Failed to convert device snapshot after upsert: {identity_key}"
+            raise RuntimeError(msg)
+        return snapshot
+
+    def update_device_snapshot_availability(
+        self,
+        identity_key: str,
+        availability: str,
+        *,
+        updated_at: str | None = None,
+    ) -> None:
+        """Update availability for an existing device snapshot."""
+        timestamp = updated_at or utcnow_iso()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE device_snapshot
+                SET availability = ?,
+                    updated_at = ?
+                WHERE identity_key = ?
+                """,
+                (availability, timestamp, identity_key),
+            )
+
+    def list_active_device_snapshots(self) -> list[DeviceSnapshotRecord]:
+        """List snapshots for identities that still own the active address binding."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT address_binding.address, device_snapshot.*
+                FROM address_binding
+                JOIN device_identity ON device_identity.identity_key = address_binding.identity_key
+                JOIN device_snapshot ON device_snapshot.identity_key = address_binding.identity_key
+                WHERE device_identity.status = 'active'
+                ORDER BY address_binding.address
+                """,
+            ).fetchall()
+        return [snapshot for row in rows if (snapshot := self._row_to_snapshot(row)) is not None]
+
     def mark_entities_replaced(self, identity_key: str, *, updated_at: str | None = None) -> None:
         """Mark active entities for an identity as replaced and frozen."""
         timestamp = updated_at or utcnow_iso()
@@ -538,4 +642,16 @@ class StateStore:
             frozen=bool(row["frozen"]),
             published_at=row["published_at"],
             last_updated_at=row["last_updated_at"],
+        )
+
+    def _row_to_snapshot(self, row: sqlite3.Row | None) -> DeviceSnapshotRecord | None:
+        if row is None:
+            return None
+        return DeviceSnapshotRecord(
+            address=row["address"],
+            identity_key=row["identity_key"],
+            object_id=row["object_id"],
+            state_json=row["state_json"],
+            availability=row["availability"],
+            updated_at=row["updated_at"],
         )

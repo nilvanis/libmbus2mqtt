@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from libmbus2mqtt.constants import APP_VERSION
+from libmbus2mqtt.constants import APP_VERSION, TOPIC_DEVICE_STATE
 from libmbus2mqtt.logging import get_logger
 from libmbus2mqtt.mbus.interface import MbusInterface
 from libmbus2mqtt.models.device import AvailabilityStatus, Device
@@ -21,6 +21,7 @@ from libmbus2mqtt.state import StateStore, build_identity_key, utcnow_iso
 
 if TYPE_CHECKING:
     from libmbus2mqtt.config import AppConfig
+    from libmbus2mqtt.state import DeviceSnapshotRecord
 
 logger = get_logger("main")
 
@@ -76,11 +77,11 @@ class Daemon:
             # Initialize M-Bus interface
             self._init_mbus()
 
-            # Initialize MQTT client
-            self._init_mqtt()
-
             # Initialize devices from config
             self._init_devices()
+
+            # Initialize MQTT client
+            self._init_mqtt()
 
             # Run initial scan if autoscan enabled
             if self.config.mbus.autoscan:
@@ -140,9 +141,6 @@ class Daemon:
         logger.info("Connecting to MQTT broker...")
 
         self._mqtt = MqttClient(self.config.mqtt)
-        self._mqtt.on_connect(self._on_mqtt_connect)
-        self._mqtt.on_disconnect(self._on_mqtt_disconnect)
-        self._mqtt.connect()
 
         # Initialize bridge info
         self._bridge_info = BridgeInfo(self._mqtt)
@@ -161,6 +159,10 @@ class Daemon:
                 self.config.homeassistant,
                 self._state_store,
             )
+
+        self._mqtt.on_connect(self._on_mqtt_connect)
+        self._mqtt.on_disconnect(self._on_mqtt_disconnect)
+        self._mqtt.connect()
 
     def _init_devices(self) -> None:
         """Initialize devices from config."""
@@ -207,18 +209,24 @@ class Daemon:
         if self._ha_discovery:
             self._ha_discovery.publish_bridge_discovery()
 
-        # Publish device discovery for known devices
+        self._restore_cached_device_state()
+
+        # Republish retained state for devices already loaded in memory
         for device in self._devices.values():
-            if device.enabled and device.mbus_data and self._is_current_binding(device):
-                self._publish_device_discovery(device)
-                if (
-                    device.availability.status != AvailabilityStatus.UNKNOWN
-                    and self._mqtt is not None
-                ):
-                    self._mqtt.publish_device_availability(
-                        device.object_id,
-                        device.availability.status.value,
-                    )
+            if not (device.enabled and device.mbus_data and self._is_current_binding(device)):
+                continue
+
+            state = self._build_device_state_payload(device)
+            if state is not None and self._mqtt is not None:
+                self._mqtt.publish_device_state(device.object_id, state)
+
+            if device.availability.status != AvailabilityStatus.UNKNOWN and self._mqtt is not None:
+                self._mqtt.publish_device_availability(
+                    device.object_id,
+                    device.availability.status.value,
+                )
+
+            self._publish_device_discovery(device)
 
     def _on_mqtt_disconnect(self) -> None:
         """Handle MQTT disconnection."""
@@ -296,12 +304,10 @@ class Daemon:
                 self._persist_address_binding(device)
 
                 # Publish state
-                state: dict[str, Any]
-                if device.ha_template:
-                    state = mbus_data.to_ha_state(device.ha_template)
-                else:
-                    state = mbus_data.to_generic_state()
-                self._mqtt.publish_device_state(device.object_id, state)
+                state = self._build_device_state_payload(device)
+                if state is not None:
+                    self._mqtt.publish_device_state(device.object_id, state)
+                    self._persist_device_snapshot(device, state)
 
                 logger.debug(f"Polled device {device.address}: success")
             else:
@@ -322,6 +328,7 @@ class Daemon:
                     device.object_id,
                     device.availability.status.value,
                 )
+                self._persist_device_snapshot_availability(device)
                 device.availability.reset_changed_flag()
             elif device.availability.status_changed:
                 device.availability.reset_changed_flag()
@@ -396,6 +403,10 @@ class Daemon:
                 self._mqtt.publish_device_availability(
                     old_identity.object_id,
                     AvailabilityStatus.OFFLINE.value,
+                )
+                self._persist_device_snapshot_availability(
+                    identity_key=old_identity.identity_key,
+                    availability=AvailabilityStatus.OFFLINE.value,
                 )
 
             event_type = "activate"
@@ -531,6 +542,96 @@ class Daemon:
             template_source=device.current_template_source,
             datarecord_count=device.datarecord_count,
         )
+
+    def _build_device_state_payload(self, device: Device) -> dict[str, Any] | None:
+        """Build the retained MQTT state payload for a device."""
+        if device.mbus_data is None:
+            return None
+        if device.ha_template:
+            return device.mbus_data.to_ha_state(device.ha_template)
+        return device.mbus_data.to_generic_state()
+
+    def _persist_device_snapshot(self, device: Device, state: dict[str, Any]) -> None:
+        """Persist the latest retained state for the current identity binding."""
+        if self._state_store is None or device.identity_key is None:
+            return
+
+        self._state_store.upsert_device_snapshot(
+            identity_key=device.identity_key,
+            object_id=device.object_id,
+            state=state,
+            availability=device.availability.status.value,
+        )
+
+    def _persist_device_snapshot_availability(
+        self,
+        device: Device | None = None,
+        *,
+        identity_key: str | None = None,
+        availability: str | None = None,
+    ) -> None:
+        """Persist availability for an existing device snapshot."""
+        if self._state_store is None:
+            return
+
+        target_identity_key = identity_key or getattr(device, "identity_key", None)
+        target_availability = availability
+        if target_availability is None and device is not None:
+            target_availability = device.availability.status.value
+
+        if (
+            target_identity_key is None
+            or target_availability is None
+            or target_availability == AvailabilityStatus.UNKNOWN.value
+        ):
+            return
+
+        self._state_store.update_device_snapshot_availability(
+            target_identity_key,
+            target_availability,
+        )
+
+    def _get_restorable_cached_snapshots(self) -> list[DeviceSnapshotRecord]:
+        """Return cached snapshots eligible for restore in this runtime."""
+        if self._state_store is None:
+            return []
+
+        snapshots = self._state_store.list_active_device_snapshots()
+        if self.config.mbus.autoscan:
+            disabled_addresses = {
+                device.address for device in self._devices.values() if not device.enabled
+            }
+            return [snapshot for snapshot in snapshots if snapshot.address not in disabled_addresses]
+
+        enabled_addresses = {device.address for device in self._devices.values() if device.enabled}
+        return [snapshot for snapshot in snapshots if snapshot.address in enabled_addresses]
+
+    def _restore_cached_device_state(self) -> None:
+        """Replay cached retained state for active bindings without live device data."""
+        if self._mqtt is None:
+            return
+
+        live_addresses = {
+            device.address
+            for device in self._devices.values()
+            if device.enabled and device.mbus_data and self._is_current_binding(device)
+        }
+
+        for snapshot in self._get_restorable_cached_snapshots():
+            if snapshot.address in live_addresses:
+                continue
+
+            self._mqtt.publish(
+                TOPIC_DEVICE_STATE.format(
+                    base=self._mqtt.base_topic,
+                    device_id=snapshot.object_id,
+                ),
+                snapshot.state_json,
+                retain=True,
+            )
+            self._mqtt.publish_device_availability(snapshot.object_id, snapshot.availability)
+            if self._ha_discovery:
+                self._ha_discovery.restore_active_device_discovery(snapshot.identity_key)
 
     def _update_bridge_info(self, loop_start: float) -> None:
         """Update and publish bridge info."""
