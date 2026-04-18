@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from pathlib import Path
 from unittest.mock import MagicMock, call
 
 import pytest
@@ -58,6 +59,11 @@ def count_identities(state_store: StateStore) -> int:
     with sqlite3.connect(state_store.db_path) as conn:
         row = conn.execute("SELECT COUNT(*) FROM device_identity").fetchone()
     return 0 if row is None else int(row[0])
+
+
+def count_open_file_descriptors() -> int:
+    """Return the current number of open file descriptors on Linux."""
+    return len(list(Path("/proc/self/fd").iterdir()))
 
 
 class TestDaemonIdentitySync:
@@ -393,3 +399,42 @@ class TestDeviceSnapshots:
         assert snapshots[0].object_id == "A1"
         assert snapshots[0].availability == "online"
         assert snapshots[0].state == {"total": 123}
+
+
+class TestStateStoreConnectionLifecycle:
+    """Tests for deterministic SQLite connection cleanup and logging."""
+
+    @pytest.mark.skipif(
+        not Path("/proc/self/fd").is_dir(),
+        reason="requires /proc/self/fd",
+    )
+    def test_repeated_reads_do_not_leak_file_descriptors(
+        self,
+        state_store: StateStore,
+    ) -> None:
+        baseline = count_open_file_descriptors()
+
+        for _ in range(200):
+            state_store.get_identity("missing")
+
+        assert count_open_file_descriptors() - baseline <= 5
+
+    def test_logs_connection_failure_with_operation_and_db_path(
+        self,
+        state_store: StateStore,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        def fail_connect() -> sqlite3.Connection:
+            raise sqlite3.OperationalError("unable to open database file")
+
+        monkeypatch.setattr(state_store, "_connect", fail_connect)
+
+        with caplog.at_level("ERROR", logger="libmbus2mqtt.state"):
+            with pytest.raises(sqlite3.OperationalError, match="unable to open database file"):
+                state_store.get_identity("missing")
+
+        state_logs = [record for record in caplog.records if record.name == "libmbus2mqtt.state"]
+        assert len(state_logs) == 1
+        assert "SQLite connection failed for get_identity" in caplog.text
+        assert str(state_store.db_path) in caplog.text
