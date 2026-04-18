@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 from libmbus2mqtt.constants import DEFAULT_DB_FILE
+from libmbus2mqtt.logging import get_logger
 
 SCHEMA_VERSION = 2
+logger = get_logger("state")
 
 
 def utcnow_iso() -> str:
@@ -104,12 +108,56 @@ class StateStore:
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON")
+        except sqlite3.Error:
+            conn.close()
+            raise
         return conn
 
+    @contextmanager
+    def _connection(self, operation: str) -> Iterator[sqlite3.Connection]:
+        conn: sqlite3.Connection | None = None
+        operation_error = False
+        try:
+            conn = self._connect()
+        except sqlite3.Error as exc:
+            logger.error(
+                "SQLite connection failed for %s (%s): %s",
+                operation,
+                self.db_path,
+                exc,
+            )
+            raise
+
+        try:
+            with conn:
+                yield conn
+        except sqlite3.Error as exc:
+            operation_error = True
+            logger.error(
+                "SQLite operation %s failed (%s): %s",
+                operation,
+                self.db_path,
+                exc,
+            )
+            raise
+        finally:
+            try:
+                conn.close()
+            except sqlite3.Error as exc:
+                if not operation_error:
+                    logger.error(
+                        "SQLite close failed for %s (%s): %s",
+                        operation,
+                        self.db_path,
+                        exc,
+                    )
+                    raise
+
     def _initialize(self) -> None:
-        with self._connect() as conn:
+        with self._connection("initialize") as conn:
             conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS device_identity (
@@ -176,7 +224,7 @@ class StateStore:
 
     def get_identity(self, identity_key: str) -> DeviceIdentityRecord | None:
         """Get an identity row by primary key."""
-        with self._connect() as conn:
+        with self._connection("get_identity") as conn:
             row = conn.execute(
                 "SELECT * FROM device_identity WHERE identity_key = ?",
                 (identity_key,),
@@ -190,7 +238,7 @@ class StateStore:
         model: str,
     ) -> DeviceIdentityRecord | None:
         """Get an identity row by raw identity fields."""
-        with self._connect() as conn:
+        with self._connection("get_identity_by_tuple") as conn:
             row = conn.execute(
                 """
                 SELECT * FROM device_identity
@@ -215,7 +263,7 @@ class StateStore:
         """Insert or update a device identity row."""
         timestamp = seen_at or utcnow_iso()
         activation_increment = 1 if increment_activation else 0
-        with self._connect() as conn:
+        with self._connection("upsert_identity") as conn:
             conn.execute(
                 """
                 INSERT INTO device_identity (
@@ -274,7 +322,7 @@ class StateStore:
     ) -> None:
         """Update the status of an identity row."""
         timestamp = seen_at or utcnow_iso()
-        with self._connect() as conn:
+        with self._connection("set_identity_status") as conn:
             conn.execute(
                 """
                 UPDATE device_identity
@@ -289,7 +337,7 @@ class StateStore:
 
     def get_address_binding(self, address: int) -> AddressBindingRecord | None:
         """Get the current active identity binding for an address."""
-        with self._connect() as conn:
+        with self._connection("get_address_binding") as conn:
             row = conn.execute(
                 "SELECT * FROM address_binding WHERE address = ?",
                 (address,),
@@ -311,7 +359,7 @@ class StateStore:
     ) -> AddressBindingRecord:
         """Insert or update the active identity binding for an address."""
         timestamp = updated_at or utcnow_iso()
-        with self._connect() as conn:
+        with self._connection("upsert_address_binding") as conn:
             conn.execute(
                 """
                 DELETE FROM address_binding
@@ -377,7 +425,7 @@ class StateStore:
         """Insert or update a stored Home Assistant entity discovery row."""
         timestamp = updated_at or utcnow_iso()
         config_json = json.dumps(config, separators=(",", ":"), ensure_ascii=True)
-        with self._connect() as conn:
+        with self._connection("upsert_published_entity") as conn:
             conn.execute(
                 """
                 INSERT INTO published_entity (
@@ -441,7 +489,7 @@ class StateStore:
             params.extend(lifecycle_states)
         query += " ORDER BY discovery_object_id"
 
-        with self._connect() as conn:
+        with self._connection("list_published_entities") as conn:
             rows = conn.execute(
                 query,
                 tuple(params),
@@ -462,7 +510,7 @@ class StateStore:
         """Insert or update the last-known retained payload for a device identity."""
         timestamp = updated_at or utcnow_iso()
         state_json = json.dumps(state)
-        with self._connect() as conn:
+        with self._connection("upsert_device_snapshot") as conn:
             conn.execute(
                 """
                 INSERT INTO device_snapshot (
@@ -503,7 +551,7 @@ class StateStore:
     ) -> None:
         """Update availability for an existing device snapshot."""
         timestamp = updated_at or utcnow_iso()
-        with self._connect() as conn:
+        with self._connection("update_device_snapshot_availability") as conn:
             conn.execute(
                 """
                 UPDATE device_snapshot
@@ -516,7 +564,7 @@ class StateStore:
 
     def list_active_device_snapshots(self) -> list[DeviceSnapshotRecord]:
         """List snapshots for identities that still own the active address binding."""
-        with self._connect() as conn:
+        with self._connection("list_active_device_snapshots") as conn:
             rows = conn.execute(
                 """
                 SELECT address_binding.address, device_snapshot.*
@@ -532,7 +580,7 @@ class StateStore:
     def mark_entities_replaced(self, identity_key: str, *, updated_at: str | None = None) -> None:
         """Mark active entities for an identity as replaced and frozen."""
         timestamp = updated_at or utcnow_iso()
-        with self._connect() as conn:
+        with self._connection("mark_entities_replaced") as conn:
             conn.execute(
                 """
                 UPDATE published_entity
@@ -553,7 +601,7 @@ class StateStore:
     ) -> None:
         """Mark a single entity as retired and frozen."""
         timestamp = updated_at or utcnow_iso()
-        with self._connect() as conn:
+        with self._connection("mark_entity_retired") as conn:
             conn.execute(
                 """
                 UPDATE published_entity
@@ -578,7 +626,7 @@ class StateStore:
         """Append a runtime identity event."""
         timestamp = created_at or utcnow_iso()
         details_json = None if details is None else json.dumps(details, separators=(",", ":"))
-        with self._connect() as conn:
+        with self._connection("record_event") as conn:
             conn.execute(
                 """
                 INSERT INTO identity_event (
@@ -590,7 +638,7 @@ class StateStore:
 
     def list_events(self) -> list[sqlite3.Row]:
         """Return all identity events for tests and diagnostics."""
-        with self._connect() as conn:
+        with self._connection("list_events") as conn:
             rows = conn.execute(
                 "SELECT * FROM identity_event ORDER BY id",
             ).fetchall()
