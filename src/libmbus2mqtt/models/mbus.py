@@ -54,9 +54,14 @@ class MbusData(BaseModel):
         return self.slave_information.manufacturer
 
     @property
+    def raw_product_name(self) -> str | None:
+        """Get the raw product name from the payload without fallback."""
+        return self.slave_information.product_name or None
+
+    @property
     def product_name(self) -> str:
         """Get product name, with fallback."""
-        return self.slave_information.product_name or "M-Bus Device"
+        return self.raw_product_name or "M-Bus Device"
 
     @property
     def serial_number(self) -> str:
@@ -72,6 +77,11 @@ class MbusData(BaseModel):
     def medium(self) -> str:
         """Get medium type."""
         return self.slave_information.medium
+
+    @property
+    def datarecord_count(self) -> int:
+        """Get the number of DataRecord items in the payload."""
+        return len(self.data_records)
 
     def get_record_value(self, record_id: str) -> str | None:
         """Get value from a data record by ID."""

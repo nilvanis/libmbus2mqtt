@@ -4,13 +4,14 @@ from pathlib import Path
 
 # Application info
 APP_NAME = "libmbus2mqtt"
-APP_VERSION = "2.0.1"
+APP_VERSION = "2.1.0"
 
 # Paths
 DEFAULT_DATA_DIR = Path("/data")
 CONFIG_DIR = DEFAULT_DATA_DIR / "config"
 TEMPLATES_DIR = DEFAULT_DATA_DIR / "templates"
 DEFAULT_CONFIG_FILE = CONFIG_DIR / "config.yaml"
+DEFAULT_DB_FILE = DEFAULT_DATA_DIR / "libmbus2mqtt.db"
 
 # M-Bus
 MBUS_ID_MIN = 0  # 0 is valid but generates warning (default address)
@@ -33,6 +34,7 @@ MQTT_DEFAULT_BASE_TOPIC = "libmbus2mqtt"
 # MQTT Topics (format strings)
 TOPIC_DEVICE_STATE = "{base}/device/{device_id}/state"
 TOPIC_DEVICE_AVAILABILITY = "{base}/device/{device_id}/availability"
+TOPIC_DEVICE_ENTITY_AVAILABILITY = "{base}/device/{device_id}/entity/{entity_key}/availability"
 TOPIC_BRIDGE_STATE = "{base}/bridge/state"
 TOPIC_COMMAND_RESCAN = "{base}/command/rescan"
 TOPIC_COMMAND_LOG_LEVEL = "{base}/command/log_level"

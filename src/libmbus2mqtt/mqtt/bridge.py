@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from libmbus2mqtt.constants import APP_VERSION
@@ -21,7 +21,7 @@ class BridgeInfo:
 
     def __init__(self, mqtt_client: MqttClient) -> None:
         self.mqtt = mqtt_client
-        self._start_time = datetime.now()
+        self._start_time = datetime.now(UTC)
         self._discovered_devices = 0
         self._online_devices = 0
         self._last_scan: datetime | None = None
@@ -42,7 +42,7 @@ class BridgeInfo:
     @property
     def uptime(self) -> str:
         """Get formatted uptime string."""
-        delta = datetime.now() - self._start_time
+        delta = datetime.now(UTC) - self._start_time
         days = delta.days
         hours, remainder = divmod(delta.seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
@@ -65,7 +65,11 @@ class BridgeInfo:
 
     def set_last_scan(self, timestamp: datetime | None = None) -> None:
         """Update last scan timestamp."""
-        self._last_scan = timestamp or datetime.now()
+        if timestamp is None:
+            self._last_scan = datetime.now(UTC)
+            return
+
+        self._last_scan = timestamp.astimezone(UTC)
 
     def set_last_poll_duration(self, duration_ms: int) -> None:
         """Update last poll duration."""
@@ -94,10 +98,8 @@ class BridgeInfo:
             "log_level": self.get_current_log_level(),
             "poll_interval": self._poll_interval,
             "last_scan": self._last_scan.isoformat() if self._last_scan else None,
+            "last_poll_duration_ms": self._last_poll_duration_ms,
         }
-
-        if self._last_poll_duration_ms is not None:
-            state["last_poll_duration_ms"] = self._last_poll_duration_ms
 
         return state
 
