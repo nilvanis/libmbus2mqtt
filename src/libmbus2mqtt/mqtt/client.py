@@ -17,6 +17,7 @@ from libmbus2mqtt.constants import (
     TOPIC_COMMAND_POLL_INTERVAL,
     TOPIC_COMMAND_RESCAN,
     TOPIC_DEVICE_AVAILABILITY,
+    TOPIC_DEVICE_ENTITY_AVAILABILITY,
     TOPIC_DEVICE_STATE,
 )
 from libmbus2mqtt.logging import get_logger
@@ -262,6 +263,20 @@ class MqttClient:
         topic = TOPIC_DEVICE_AVAILABILITY.format(
             base=self.base_topic,
             device_id=device_id,
+        )
+        return self.publish(topic, status, retain=True)
+
+    def publish_entity_availability(
+        self,
+        device_id: str,
+        entity_key: str,
+        status: str,
+    ) -> bool:
+        """Publish device entity availability status."""
+        topic = TOPIC_DEVICE_ENTITY_AVAILABILITY.format(
+            base=self.base_topic,
+            device_id=device_id,
+            entity_key=entity_key,
         )
         return self.publish(topic, status, retain=True)
 

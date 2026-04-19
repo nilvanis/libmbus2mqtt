@@ -25,7 +25,7 @@ class TestParseXml:
         """Test parsing Itron Cyble fixture."""
         data = parse_xml(itron_xml)
 
-        assert data.device_id == "22003204"
+        assert data.device_id == "90000001"
         assert data.manufacturer == "ACW"
         assert data.version == "20"
         assert data.product_name == "Itron CYBLE M-Bus 1.4"
@@ -175,7 +175,7 @@ class TestXmlToDict:
         slave_info = result["SlaveInformation"]
 
         assert isinstance(slave_info, dict)
-        assert slave_info["Id"] == "22003204"
+        assert slave_info["Id"] == "90000001"
         assert slave_info["Manufacturer"] == "ACW"
         assert slave_info["ProductName"] == "Itron CYBLE M-Bus 1.4"
 
