@@ -12,6 +12,7 @@ from libmbus2mqtt.constants import (
     APP_NAME,
     TOPIC_BRIDGE_STATE,
     TOPIC_DEVICE_AVAILABILITY,
+    TOPIC_DEVICE_ENTITY_AVAILABILITY,
     TOPIC_DEVICE_STATE,
 )
 from libmbus2mqtt.mqtt.client import MqttClient
@@ -288,6 +289,20 @@ class TestMqttClientPublishHelpers:
 
         call_args = connected_client._client.publish.call_args
         expected_topic = TOPIC_DEVICE_AVAILABILITY.format(base="test", device_id="device123")
+        assert call_args[0][0] == expected_topic
+        assert call_args[0][1] == "online"
+        assert call_args[1]["retain"] is True
+
+    def test_publish_entity_availability(self, connected_client: MqttClient) -> None:
+        """Test publish_entity_availability publishes to correct topic."""
+        connected_client.publish_entity_availability("device123", "volume", "online")
+
+        call_args = connected_client._client.publish.call_args
+        expected_topic = TOPIC_DEVICE_ENTITY_AVAILABILITY.format(
+            base="test",
+            device_id="device123",
+            entity_key="volume",
+        )
         assert call_args[0][0] == expected_topic
         assert call_args[0][1] == "online"
         assert call_args[1]["retain"] is True
