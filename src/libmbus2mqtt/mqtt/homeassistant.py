@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from libmbus2mqtt.constants import (
@@ -10,20 +12,34 @@ from libmbus2mqtt.constants import (
     HA_DEFAULT_DISCOVERY_PREFIX,
     TOPIC_BRIDGE_STATE,
     TOPIC_DEVICE_AVAILABILITY,
+    TOPIC_DEVICE_ENTITY_AVAILABILITY,
     TOPIC_DEVICE_STATE,
 )
 from libmbus2mqtt.logging import get_logger
-from libmbus2mqtt.templates import get_template_for_device
+from libmbus2mqtt.templates import TemplateSelection, resolve_template
 
 if TYPE_CHECKING:
     from libmbus2mqtt.config import HomeAssistantConfig
     from libmbus2mqtt.models.device import Device
     from libmbus2mqtt.mqtt.client import MqttClient
+    from libmbus2mqtt.state import StateStore
 
 logger = get_logger("mqtt.homeassistant")
 
 # Bridge device identifier
 BRIDGE_DEVICE_ID = f"{APP_NAME}_bridge"
+
+
+@dataclass(frozen=True)
+class PublishedDeviceEntity:
+    """Published Home Assistant entity metadata."""
+
+    discovery_object_id: str
+    component: str
+    entity_key: str
+    discovery_topic: str
+    entity_availability_topic: str | None
+    config: dict[str, Any]
 
 
 def get_bridge_device_info() -> dict[str, Any]:
@@ -64,9 +80,11 @@ class HomeAssistantDiscovery:
         self,
         mqtt_client: MqttClient,
         config: HomeAssistantConfig,
+        state_store: StateStore | None = None,
     ) -> None:
         self.mqtt = mqtt_client
         self.config = config
+        self.state_store = state_store
         self._published_entities: set[str] = set()
 
     @property
@@ -89,7 +107,6 @@ class HomeAssistantDiscovery:
         bridge_device = get_bridge_device_info()
         base = self.base_topic
 
-        # Discovered Devices sensor
         self._publish_sensor(
             object_id=f"{BRIDGE_DEVICE_ID}_discovered_devices",
             name="Discovered Devices",
@@ -98,8 +115,6 @@ class HomeAssistantDiscovery:
             value_template="{{ value_json.discovered_devices }}",
             icon="mdi:devices",
         )
-
-        # Online Devices sensor
         self._publish_sensor(
             object_id=f"{BRIDGE_DEVICE_ID}_online_devices",
             name="Online Devices",
@@ -108,8 +123,6 @@ class HomeAssistantDiscovery:
             value_template="{{ value_json.online_devices }}",
             icon="mdi:check-network",
         )
-
-        # Firmware Version sensor
         self._publish_sensor(
             object_id=f"{BRIDGE_DEVICE_ID}_version",
             name="Firmware Version",
@@ -119,20 +132,17 @@ class HomeAssistantDiscovery:
             icon="mdi:tag",
             entity_category="diagnostic",
         )
-
-        # Last Scan sensor (disabled by default)
         self._publish_sensor(
             object_id=f"{BRIDGE_DEVICE_ID}_last_scan",
             name="Last Scan",
             device=bridge_device,
             state_topic=f"{base}/bridge/info",
-            value_template="{{ value_json.last_scan }}",
+            value_template="{{ value_json.get('last_scan') }}",
             icon="mdi:update",
+            device_class="timestamp",
             entity_category="diagnostic",
             enabled_by_default=False,
         )
-
-        # Uptime sensor (disabled by default)
         self._publish_sensor(
             object_id=f"{BRIDGE_DEVICE_ID}_uptime",
             name="Uptime",
@@ -143,21 +153,17 @@ class HomeAssistantDiscovery:
             entity_category="diagnostic",
             enabled_by_default=False,
         )
-
-        # Last Poll Duration sensor (disabled by default)
         self._publish_sensor(
             object_id=f"{BRIDGE_DEVICE_ID}_last_poll_duration",
             name="Last Poll Duration",
             device=bridge_device,
             state_topic=f"{base}/bridge/info",
-            value_template="{{ value_json.last_poll_duration_ms }}",
+            value_template="{{ value_json.get('last_poll_duration_ms') }}",
             unit_of_measurement="ms",
             icon="mdi:timer",
             entity_category="diagnostic",
             enabled_by_default=False,
         )
-
-        # Rescan Devices button
         self._publish_button(
             object_id=f"{BRIDGE_DEVICE_ID}_rescan",
             name="Rescan Devices",
@@ -165,8 +171,6 @@ class HomeAssistantDiscovery:
             command_topic=f"{base}/command/rescan",
             icon="mdi:magnify-scan",
         )
-
-        # Log Level select
         self._publish_select(
             object_id=f"{BRIDGE_DEVICE_ID}_log_level",
             name="Log Level",
@@ -178,8 +182,6 @@ class HomeAssistantDiscovery:
             icon="mdi:text-box-outline",
             entity_category="config",
         )
-
-        # Poll Interval number
         self._publish_number(
             object_id=f"{BRIDGE_DEVICE_ID}_poll_interval",
             name="Poll Interval",
@@ -203,40 +205,33 @@ class HomeAssistantDiscovery:
         logger.info(f"Publishing HA discovery for device ID {device.address}: {device.name}")
 
         device_info = get_mbus_device_info(device)
-        base = self.base_topic
         device_id = device.object_id
+        state_topic = TOPIC_DEVICE_STATE.format(base=self.base_topic, device_id=device_id)
 
-        # State/availability topics for this device
-        state_topic = TOPIC_DEVICE_STATE.format(base=base, device_id=device_id)
-        availability_topic = TOPIC_DEVICE_AVAILABILITY.format(base=base, device_id=device_id)
-        availability_list = self._build_device_availability_list(availability_topic)
+        selection = self._resolve_device_template(device)
+        device.current_template_name = selection.filename
+        device.current_template_mode = selection.mode
+        device.current_template_source = selection.source
+        device.ha_template = selection.template
 
-        # Try to load a template for this device
-        template = None
-        if device.manufacturer:
-            template = get_template_for_device(device.manufacturer, device.model)
-            if template:
-                logger.debug(f"Using template for {device.manufacturer}/{device.model}")
-                device.ha_template = template
-
-        if template:
-            # Use template-defined entities
-            self._publish_template_entities(
+        published_entities: list[PublishedDeviceEntity]
+        if selection.template:
+            published_entities = self._publish_template_entities(
                 device=device,
                 device_info=device_info,
-                template=template,
+                template=selection.template,
                 state_topic=state_topic,
-                availability=availability_list,
+                availability=[],
             )
         else:
-            # Publish generic entities based on data records
-            self._publish_generic_entities(
+            published_entities = self._publish_generic_entities(
                 device=device,
                 device_info=device_info,
                 state_topic=state_topic,
-                availability=availability_list,
+                availability=[],
             )
 
+        self._sync_published_entities(device, published_entities)
         device.ha_discovery_published = True
 
     def _publish_template_entities(
@@ -246,35 +241,40 @@ class HomeAssistantDiscovery:
         template: dict[str, dict[str, str]],
         state_topic: str,
         availability: list[dict[str, str]],
-    ) -> None:
+    ) -> list[PublishedDeviceEntity]:
         """Publish entities defined in a device template."""
+        published_entities: list[PublishedDeviceEntity] = []
         for entity_id, entity_config in template.items():
-            component = (
-                entity_config.get("component")
-                or entity_config.get("platform")  # support legacy key used in templates
-                or "sensor"
-            )
+            component = entity_config.get("component") or entity_config.get("platform") or "sensor"
             object_id = f"{APP_NAME}_{device.object_id}_{entity_id}"
+            discovery_topic = self._get_discovery_topic(component, object_id)
+            entity_availability_topic = self._get_entity_availability_topic(
+                device.object_id, entity_id
+            )
 
             config: dict[str, Any] = {
                 "name": entity_config.get("name", entity_id),
                 "unique_id": object_id,
                 "device": device_info,
                 "state_topic": state_topic,
-                "availability": availability,
+                "availability": availability
+                or self._build_device_availability_list(
+                    device.object_id, entity_availability_topic
+                ),
             }
 
-            # Merge all template-defined fields except component/platform (handled above)
             for key, value in entity_config.items():
                 if key in {"component", "platform"}:
                     continue
                 config[key] = value
 
-            # Ensure core linkage fields are not overridden by template
             config["unique_id"] = object_id
             config["device"] = device_info
             config["state_topic"] = state_topic
-            config["availability"] = availability
+            config["availability"] = availability or self._build_device_availability_list(
+                device.object_id,
+                entity_availability_topic,
+            )
 
             self.mqtt.publish_ha_discovery(
                 component=component,
@@ -282,7 +282,19 @@ class HomeAssistantDiscovery:
                 config=config,
                 discovery_prefix=self.discovery_prefix,
             )
+            self.mqtt.publish_entity_availability(device.object_id, entity_id, "online")
             self._published_entities.add(f"{component}/{object_id}")
+            published_entities.append(
+                PublishedDeviceEntity(
+                    discovery_object_id=object_id,
+                    component=component,
+                    entity_key=entity_id,
+                    discovery_topic=discovery_topic,
+                    entity_availability_topic=entity_availability_topic,
+                    config=config,
+                )
+            )
+        return published_entities
 
     def _publish_generic_entities(
         self,
@@ -290,19 +302,23 @@ class HomeAssistantDiscovery:
         device_info: dict[str, Any],
         state_topic: str,
         availability: list[dict[str, str]],
-    ) -> None:
+    ) -> list[PublishedDeviceEntity]:
         """Publish generic entities based on M-Bus data records."""
         if not device.mbus_data:
             logger.warning(f"No M-Bus data for device ID {device.address} ({device.name})")
-            return
+            return []
 
+        published_entities: list[PublishedDeviceEntity] = []
         for record_key, record in device.mbus_data.data_records.items():
             if record.value is None:
                 continue
 
-            # Create sensor for each data record
-            record_id = f"record_{record_key}" if record_key else f"func_{record.function}"
-            object_id = f"{APP_NAME}_{device.object_id}_{record_id}"
+            entity_key = f"record_{record_key}" if record_key else f"func_{record.function}"
+            object_id = f"{APP_NAME}_{device.object_id}_{entity_key}"
+            discovery_topic = self._get_discovery_topic("sensor", object_id)
+            entity_availability_topic = self._get_entity_availability_topic(
+                device.object_id, entity_key
+            )
 
             config: dict[str, Any] = {
                 "name": record.function or f"Record {record_key}",
@@ -310,7 +326,10 @@ class HomeAssistantDiscovery:
                 "device": device_info,
                 "state_topic": state_topic,
                 "value_template": f"{{{{ value_json.records['{record_key}'].value }}}}",
-                "availability": availability,
+                "availability": availability
+                or self._build_device_availability_list(
+                    device.object_id, entity_availability_topic
+                ),
             }
 
             if record.unit:
@@ -322,24 +341,169 @@ class HomeAssistantDiscovery:
                 config=config,
                 discovery_prefix=self.discovery_prefix,
             )
+            self.mqtt.publish_entity_availability(device.object_id, entity_key, "online")
             self._published_entities.add(f"sensor/{object_id}")
+            published_entities.append(
+                PublishedDeviceEntity(
+                    discovery_object_id=object_id,
+                    component="sensor",
+                    entity_key=entity_key,
+                    discovery_topic=discovery_topic,
+                    entity_availability_topic=entity_availability_topic,
+                    config=config,
+                )
+            )
+        return published_entities
+
+    def publish_replaced_device(self, identity_key: str, replaced_name: str) -> None:
+        """Republish stored discovery for a replaced device with a renamed device label."""
+        if self.state_store is None:
+            return
+
+        for entity in self.state_store.list_published_entities(
+            identity_key,
+            lifecycle_states=("active", "replaced"),
+        ):
+            config = copy.deepcopy(entity.config)
+            device_info = config.get("device")
+            if isinstance(device_info, dict):
+                device_info["name"] = replaced_name
+            self.mqtt.publish(entity.discovery_topic, config, retain=True)
+            self.state_store.upsert_published_entity(
+                discovery_object_id=entity.discovery_object_id,
+                identity_key=entity.identity_key,
+                component=entity.component,
+                entity_key=entity.entity_key,
+                discovery_topic=entity.discovery_topic,
+                entity_availability_topic=entity.entity_availability_topic,
+                config=config,
+                lifecycle_state="replaced",
+                frozen=True,
+            )
+            self._published_entities.add(f"{entity.component}/{entity.discovery_object_id}")
+
+    def restore_active_device_discovery(self, identity_key: str) -> None:
+        """Republish retained discovery rows for the active identity binding."""
+        if self.state_store is None or not self.config.enabled:
+            return
+
+        for entity in self.state_store.list_published_entities(
+            identity_key,
+            lifecycle_states=("active",),
+        ):
+            if entity.entity_availability_topic:
+                self.mqtt.publish(entity.entity_availability_topic, "online", retain=True)
+            self.mqtt.publish(entity.discovery_topic, entity.config, retain=True)
+            self._published_entities.add(f"{entity.component}/{entity.discovery_object_id}")
+
+    def _resolve_device_template(self, device: Device) -> TemplateSelection:
+        """Resolve the template selection for a device."""
+        selection = resolve_template(
+            manufacturer=device.manufacturer,
+            product_name=device.model,
+            data_record_count=device.datarecord_count or None,
+            explicit_filename=device.template_name,
+        )
+        if selection.template:
+            logger.debug(
+                "Using template %s from %s for %s/%s (DataRecordCount=%s)",
+                selection.filename,
+                selection.source,
+                device.manufacturer,
+                device.model,
+                device.datarecord_count,
+            )
+        return selection
+
+    def _sync_published_entities(
+        self,
+        device: Device,
+        published_entities: list[PublishedDeviceEntity],
+    ) -> None:
+        """Persist active discovery rows and retire obsolete ones."""
+        if self.state_store is None or device.identity_key is None:
+            return
+
+        existing_entities = {
+            entity.entity_key: entity
+            for entity in self.state_store.list_published_entities(device.identity_key)
+        }
+        active_keys = {entity.entity_key for entity in published_entities}
+
+        for published_entity in published_entities:
+            stored_entity = existing_entities.get(published_entity.entity_key)
+            if (
+                stored_entity is not None
+                and stored_entity.discovery_topic != published_entity.discovery_topic
+            ):
+                self._remove_discovery_topic(stored_entity.discovery_topic)
+                self._published_entities.discard(
+                    f"{stored_entity.component}/{stored_entity.discovery_object_id}"
+                )
+            self.state_store.upsert_published_entity(
+                discovery_object_id=published_entity.discovery_object_id,
+                identity_key=device.identity_key,
+                component=published_entity.component,
+                entity_key=published_entity.entity_key,
+                discovery_topic=published_entity.discovery_topic,
+                entity_availability_topic=published_entity.entity_availability_topic,
+                config=published_entity.config,
+                lifecycle_state="active",
+                frozen=False,
+            )
+
+        for entity_key, stored_entity in existing_entities.items():
+            if entity_key in active_keys:
+                continue
+            if stored_entity.entity_availability_topic:
+                self.mqtt.publish(stored_entity.entity_availability_topic, "offline", retain=True)
+            self.state_store.mark_entity_retired(device.identity_key, entity_key)
+
+    def _remove_discovery_topic(self, discovery_topic: str) -> None:
+        """Clear a retained discovery topic that no longer applies."""
+        self.mqtt.publish(discovery_topic, "", retain=True)
+
+    def _get_discovery_topic(self, component: str, object_id: str) -> str:
+        """Build the retained discovery topic for an entity."""
+        return f"{self.discovery_prefix}/{component}/{object_id}/config"
+
+    def _get_entity_availability_topic(self, device_id: str, entity_key: str) -> str:
+        """Build the retained entity availability topic for an entity."""
+        return TOPIC_DEVICE_ENTITY_AVAILABILITY.format(
+            base=self.base_topic,
+            device_id=device_id,
+            entity_key=entity_key,
+        )
 
     def _build_device_availability_list(
-        self, device_availability_topic: str
+        self,
+        device_id: str,
+        entity_availability_topic: str | None = None,
     ) -> list[dict[str, str]]:
-        """Build HA availability list combining bridge and device availability topics."""
-        return [
+        """Build HA availability list combining bridge, device, and entity availability."""
+        availability = [
             {
                 "topic": TOPIC_BRIDGE_STATE.format(base=self.base_topic),
                 "payload_available": "online",
                 "payload_not_available": "offline",
             },
             {
-                "topic": device_availability_topic,
+                "topic": TOPIC_DEVICE_AVAILABILITY.format(
+                    base=self.base_topic, device_id=device_id
+                ),
                 "payload_available": "online",
                 "payload_not_available": "offline",
             },
         ]
+        if entity_availability_topic is not None:
+            availability.append(
+                {
+                    "topic": entity_availability_topic,
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
+                }
+            )
+        return availability
 
     def _publish_sensor(
         self,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from unittest.mock import MagicMock
 
 import pytest
@@ -16,6 +17,7 @@ from libmbus2mqtt.mqtt.homeassistant import (
     get_bridge_device_info,
     get_mbus_device_info,
 )
+from libmbus2mqtt.state import StateStore, build_identity_key
 
 # ============================================================================
 # Helper Function Tests
@@ -251,6 +253,41 @@ class TestPublishBridgeDiscovery:
         number_calls = [c for c in calls if c.kwargs.get("component") == "number"]
         assert len(number_calls) > 0
 
+    def test_last_scan_sensor_uses_timestamp_device_class(
+        self,
+        discovery: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+    ) -> None:
+        """Test Last Scan sensor is published as a timestamp sensor."""
+        discovery.publish_bridge_discovery()
+
+        last_scan_call = next(
+            call
+            for call in mock_mqtt_client.publish_ha_discovery.call_args_list
+            if call.kwargs.get("object_id") == f"{BRIDGE_DEVICE_ID}_last_scan"
+        )
+
+        config = last_scan_call.kwargs["config"]
+        assert config["device_class"] == "timestamp"
+        assert config["value_template"] == "{{ value_json.get('last_scan') }}"
+
+    def test_last_poll_duration_sensor_uses_safe_template(
+        self,
+        discovery: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+    ) -> None:
+        """Test Last Poll Duration sensor tolerates missing keys."""
+        discovery.publish_bridge_discovery()
+
+        duration_call = next(
+            call
+            for call in mock_mqtt_client.publish_ha_discovery.call_args_list
+            if call.kwargs.get("object_id") == f"{BRIDGE_DEVICE_ID}_last_poll_duration"
+        )
+
+        config = duration_call.kwargs["config"]
+        assert config["value_template"] == "{{ value_json.get('last_poll_duration_ms') }}"
+
     def test_disabled_does_not_publish(
         self,
         discovery_disabled: HomeAssistantDiscovery,
@@ -385,6 +422,333 @@ class TestPublishDeviceDiscovery:
         assert cfg["enabled_by_default"] is False
         assert cfg["suggested_display_precision"] == 2
         assert cfg["icon"] == "mdi:test-tube"
+
+
+class TestPersistentDiscoveryState:
+    """Tests for persisted discovery entity lifecycle."""
+
+    @pytest.fixture
+    def state_store(self, tmp_path_factory: pytest.TempPathFactory) -> StateStore:
+        """Create temporary SQLite state store."""
+        return StateStore(tmp_path_factory.mktemp("state") / "libmbus2mqtt.db")
+
+    @pytest.fixture
+    def discovery_with_state(
+        self,
+        mock_mqtt_client: MagicMock,
+        state_store: StateStore,
+    ) -> HomeAssistantDiscovery:
+        """Create HomeAssistantDiscovery with persistent state."""
+        return HomeAssistantDiscovery(
+            mock_mqtt_client,
+            HomeAssistantConfig(enabled=True),
+            state_store,
+        )
+
+    def test_publish_replaced_device_renames_stored_discovery(
+        self,
+        discovery_with_state: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+        state_store: StateStore,
+    ) -> None:
+        """Stored discovery should be republished with replaced device name."""
+        identity_key = build_identity_key("123", "ACW", "Meter")
+        state_store.upsert_identity(
+            identity_key=identity_key,
+            object_id="123",
+            manufacturer="ACW",
+            model="Meter",
+            status="active",
+            last_address=1,
+            increment_activation=True,
+        )
+        state_store.upsert_published_entity(
+            discovery_object_id="libmbus2mqtt_123_0",
+            identity_key=identity_key,
+            component="sensor",
+            entity_key="0",
+            discovery_topic="homeassistant/sensor/libmbus2mqtt_123_0/config",
+            entity_availability_topic="libmbus2mqtt/device/123/entity/0/availability",
+            config={
+                "name": "Fabrication Number",
+                "device": {"name": "Water Meter"},
+            },
+            lifecycle_state="active",
+            frozen=False,
+        )
+
+        discovery_with_state.publish_replaced_device(identity_key, "Water Meter (replaced)")
+
+        publish_calls = mock_mqtt_client.publish.call_args_list
+        assert publish_calls
+        assert publish_calls[0].args[0] == "homeassistant/sensor/libmbus2mqtt_123_0/config"
+        assert publish_calls[0].kwargs["retain"] is True
+        assert publish_calls[0].args[1]["device"]["name"] == "Water Meter (replaced)"
+
+        entity = state_store.list_published_entities(identity_key)[0]
+        assert entity.lifecycle_state == "replaced"
+        assert entity.frozen is True
+
+    def test_publish_replaced_device_skips_retired_entities(
+        self,
+        discovery_with_state: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+        state_store: StateStore,
+    ) -> None:
+        """Replacing a device should not resurrect entities already retired by rematch."""
+        identity_key = build_identity_key("123", "ACW", "Meter")
+        state_store.upsert_identity(
+            identity_key=identity_key,
+            object_id="123",
+            manufacturer="ACW",
+            model="Meter",
+            status="active",
+            last_address=1,
+            increment_activation=True,
+        )
+        state_store.upsert_published_entity(
+            discovery_object_id="libmbus2mqtt_123_0",
+            identity_key=identity_key,
+            component="sensor",
+            entity_key="0",
+            discovery_topic="homeassistant/sensor/libmbus2mqtt_123_0/config",
+            entity_availability_topic="libmbus2mqtt/device/123/entity/0/availability",
+            config={"name": "Active", "device": {"name": "Water Meter"}},
+            lifecycle_state="active",
+            frozen=False,
+        )
+        state_store.upsert_published_entity(
+            discovery_object_id="libmbus2mqtt_123_7",
+            identity_key=identity_key,
+            component="sensor",
+            entity_key="7",
+            discovery_topic="homeassistant/sensor/libmbus2mqtt_123_7/config",
+            entity_availability_topic="libmbus2mqtt/device/123/entity/7/availability",
+            config={"name": "Retired", "device": {"name": "Water Meter"}},
+            lifecycle_state="retired",
+            frozen=True,
+        )
+        state_store.mark_entities_replaced(identity_key)
+
+        discovery_with_state.publish_replaced_device(identity_key, "Water Meter (replaced)")
+
+        publish_topics = [call.args[0] for call in mock_mqtt_client.publish.call_args_list]
+        assert "homeassistant/sensor/libmbus2mqtt_123_0/config" in publish_topics
+        assert "homeassistant/sensor/libmbus2mqtt_123_7/config" not in publish_topics
+
+        entities = {
+            entity.entity_key: entity
+            for entity in state_store.list_published_entities(identity_key)
+        }
+        assert entities["0"].lifecycle_state == "replaced"
+        assert entities["7"].lifecycle_state == "retired"
+
+    def test_restore_active_device_discovery_republishes_active_entities(
+        self,
+        discovery_with_state: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+        state_store: StateStore,
+    ) -> None:
+        """Restore should republish active retained discovery and entity availability only."""
+        identity_key = build_identity_key("123", "ACW", "Meter")
+        state_store.upsert_identity(
+            identity_key=identity_key,
+            object_id="123",
+            manufacturer="ACW",
+            model="Meter",
+            status="active",
+            last_address=1,
+            increment_activation=True,
+        )
+        state_store.upsert_published_entity(
+            discovery_object_id="libmbus2mqtt_123_0",
+            identity_key=identity_key,
+            component="sensor",
+            entity_key="0",
+            discovery_topic="homeassistant/sensor/libmbus2mqtt_123_0/config",
+            entity_availability_topic="libmbus2mqtt/device/123/entity/0/availability",
+            config={"name": "Active", "device": {"name": "Water Meter"}},
+            lifecycle_state="active",
+            frozen=False,
+        )
+        state_store.upsert_published_entity(
+            discovery_object_id="libmbus2mqtt_123_7",
+            identity_key=identity_key,
+            component="sensor",
+            entity_key="7",
+            discovery_topic="homeassistant/sensor/libmbus2mqtt_123_7/config",
+            entity_availability_topic="libmbus2mqtt/device/123/entity/7/availability",
+            config={"name": "Retired", "device": {"name": "Water Meter"}},
+            lifecycle_state="retired",
+            frozen=True,
+        )
+
+        discovery_with_state.restore_active_device_discovery(identity_key)
+
+        publish_calls = mock_mqtt_client.publish.call_args_list
+        assert len(publish_calls) == 2
+        assert publish_calls[0].args == ("libmbus2mqtt/device/123/entity/0/availability", "online")
+        assert publish_calls[0].kwargs["retain"] is True
+        assert publish_calls[1].args[0] == "homeassistant/sensor/libmbus2mqtt_123_0/config"
+        assert publish_calls[1].args[1]["name"] == "Active"
+        assert publish_calls[1].kwargs["retain"] is True
+
+    def test_template_rematch_retires_removed_entities(
+        self,
+        discovery_with_state: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+        state_store: StateStore,
+        itron_mbus_data: MbusData,
+        itron_dr7_mbus_data: MbusData,
+    ) -> None:
+        """Entities removed by rematch should be retired and marked offline."""
+        device = Device(address=1)
+        device.update_from_mbus_data(itron_mbus_data)
+        identity_key = build_identity_key(
+            device.object_id,
+            device.manufacturer or "",
+            device.model or "",
+        )
+        state_store.upsert_identity(
+            identity_key=identity_key,
+            object_id=device.object_id,
+            manufacturer=device.manufacturer or "",
+            model=device.model or "",
+            status="active",
+            last_address=device.address,
+            increment_activation=True,
+        )
+        device.identity_key = identity_key
+
+        discovery_with_state.publish_device_discovery(device)
+
+        rematch_data = deepcopy(itron_dr7_mbus_data)
+        rematch_data.slave_information.id = itron_mbus_data.device_id
+        device.update_from_mbus_data(rematch_data)
+        device.identity_key = identity_key
+
+        mock_mqtt_client.reset_mock()
+        discovery_with_state.publish_device_discovery(device)
+
+        entities = {
+            entity.entity_key: entity
+            for entity in state_store.list_published_entities(identity_key)
+        }
+        assert entities["7"].lifecycle_state == "retired"
+        assert entities["7"].frozen is True
+        assert entities["6"].lifecycle_state == "active"
+
+        offline_topic = f"libmbus2mqtt/device/{itron_mbus_data.device_id}/entity/7/availability"
+        assert any(
+            call.args == (offline_topic, "offline") and call.kwargs.get("retain") is True
+            for call in mock_mqtt_client.publish.call_args_list
+        )
+
+    def test_retired_entity_reactivates_without_duplicate_row(
+        self,
+        discovery_with_state: HomeAssistantDiscovery,
+        state_store: StateStore,
+        itron_mbus_data: MbusData,
+        itron_dr7_mbus_data: MbusData,
+    ) -> None:
+        """A later rematch should reactivate the same stored entity row."""
+        device = Device(address=1)
+        device.update_from_mbus_data(itron_mbus_data)
+        identity_key = build_identity_key(
+            device.object_id,
+            device.manufacturer or "",
+            device.model or "",
+        )
+        state_store.upsert_identity(
+            identity_key=identity_key,
+            object_id=device.object_id,
+            manufacturer=device.manufacturer or "",
+            model=device.model or "",
+            status="active",
+            last_address=device.address,
+            increment_activation=True,
+        )
+        device.identity_key = identity_key
+
+        discovery_with_state.publish_device_discovery(device)
+
+        rematch_data = deepcopy(itron_dr7_mbus_data)
+        rematch_data.slave_information.id = itron_mbus_data.device_id
+        device.update_from_mbus_data(rematch_data)
+        device.identity_key = identity_key
+        discovery_with_state.publish_device_discovery(device)
+
+        device.update_from_mbus_data(itron_mbus_data)
+        device.identity_key = identity_key
+        discovery_with_state.publish_device_discovery(device)
+
+        entities = [
+            entity
+            for entity in state_store.list_published_entities(identity_key)
+            if entity.entity_key == "7"
+        ]
+        assert len(entities) == 1
+        assert entities[0].lifecycle_state == "active"
+        assert entities[0].frozen is False
+
+    def test_component_change_removes_old_discovery_topic(
+        self,
+        discovery_with_state: HomeAssistantDiscovery,
+        mock_mqtt_client: MagicMock,
+        state_store: StateStore,
+    ) -> None:
+        """Changing component for the same entity key should clear the old retained topic."""
+        device = Device(address=1)
+        device.serial_number = "123"
+        device.manufacturer = "ACW"
+        device.model = "Meter"
+        device.identity_key = build_identity_key("123", "ACW", "Meter")
+        state_store.upsert_identity(
+            identity_key=device.identity_key,
+            object_id=device.object_id,
+            manufacturer=device.manufacturer,
+            model=device.model,
+            status="active",
+            last_address=device.address,
+            increment_activation=True,
+        )
+        device_info = get_mbus_device_info(device)
+        sensor_entities = discovery_with_state._publish_template_entities(
+            device=device,
+            device_info=device_info,
+            template={
+                "flag": {
+                    "component": "sensor",
+                    "name": "Flag",
+                    "value_template": "{{ value_json.flag }}",
+                }
+            },
+            state_topic="libmbus2mqtt/device/123/state",
+            availability=[],
+        )
+        discovery_with_state._sync_published_entities(device, sensor_entities)
+
+        mock_mqtt_client.reset_mock()
+        binary_sensor_entities = discovery_with_state._publish_template_entities(
+            device=device,
+            device_info=device_info,
+            template={
+                "flag": {
+                    "component": "binary_sensor",
+                    "name": "Flag",
+                    "value_template": "{{ value_json.flag }}",
+                }
+            },
+            state_topic="libmbus2mqtt/device/123/state",
+            availability=[],
+        )
+        discovery_with_state._sync_published_entities(device, binary_sensor_entities)
+
+        assert any(
+            call.args == ("homeassistant/sensor/libmbus2mqtt_123_flag/config", "")
+            and call.kwargs.get("retain") is True
+            for call in mock_mqtt_client.publish.call_args_list
+        )
 
 
 class TestRemoveAllDiscovery:
