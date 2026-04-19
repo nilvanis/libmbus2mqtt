@@ -1,0 +1,154 @@
+{
+    "0": {
+        "name": "Fabrication Number",
+        "icon": "mdi:numeric",
+        "platform": "sensor",
+        "value_template":"{{ value_json.fabrication_number }}",
+        "entity_category": "diagnostic"
+    },
+    "1": {
+        "name": "Customer ID",
+        "icon": "mdi:card-account-details-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.customer_id }}",
+        "entity_category": "diagnostic"
+    },
+    "2": {
+        "name": "Time Point",
+        "icon": "mdi:calendar-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.time_point }}",
+        "entity_category": "diagnostic"
+    },
+    "3": {
+        "name": "Remaining Battery Time",
+        "icon": "mdi:battery-clock-outline",
+        "platform": "sensor",
+        "value_template":"{{ value_json.battery_time }}",
+        "device_class": "duration",
+        "unit_of_measurement": "h",
+        "entity_category": "diagnostic"
+    },
+    "4": {
+        "name": "Volume: Forward",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template": "{{ value_json.volume_forward | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "total_increasing"
+    },
+    "5": {
+        "name": "Volume: Reverse",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{  value_json.volume_reverse  | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "total_increasing"
+    },
+    "6": {
+        "name": "Volume: Month Start",
+        "icon": "mdi:counter",
+        "platform": "sensor",
+        "value_template":"{{ value_json.volume_month_start | float / 1000 }}",
+        "device_class": "water",
+        "unit_of_measurement": "m³",
+        "state_class": "total_increasing"
+    },
+    "7": {
+        "name": "Manufacturer Specific",
+        "icon": "mdi:hexadecimal",
+        "platform": "sensor",
+        "value_template":"{{ value_json.manufacturer_specific }}",
+        "entity_category": "diagnostic",
+        "enabled_by_default": false
+    },
+    "custom-fdr_day": {
+        "name": "FDR Day",
+        "icon": "mdi:calendar-month-outline",
+        "platform": "sensor",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{{ parts[0] | int(base=16) if parts | length == 3 and parts[0] is match('^[0-9A-Fa-f]{2}$') else none }}",
+        "entity_category": "diagnostic"
+    },
+    "custom-programming_counter": {
+        "name": "Programming Counter",
+        "icon": "mdi:sort-numeric-ascending-variant",
+        "platform": "sensor",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{{ parts[1] | int(base=16) if parts | length == 3 and parts[1] is match('^[0-9A-Fa-f]{2}$') else none }}",
+        "entity_category": "diagnostic"
+    },
+    "custom-flag_0": {
+        "name": "Backflow",
+        "component": "binary_sensor",
+        "device_class": "problem",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(1) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "entity_category": "diagnostic"
+    },
+    "custom-flag_1": {
+        "name": "Leak",
+        "component": "binary_sensor",
+        "device_class": "problem",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(2) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "entity_category": "diagnostic"
+    },
+    "custom-flag_2": {
+        "name": "Backflow Alarm Valid",
+        "component": "binary_sensor",
+        "icon": "mdi:alert-circle-check-outline",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(4) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "entity_category": "diagnostic"
+    },
+    "custom-flag_3": {
+        "name": "Leak Alarm Valid",
+        "component": "binary_sensor",
+        "icon": "mdi:alert-circle-check-outline",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(8) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "entity_category": "diagnostic"
+    },
+    "custom-flag_4": {
+        "name": "Tamper",
+        "component": "binary_sensor",
+        "device_class": "tamper",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(16) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "entity_category": "diagnostic"
+    },
+    "custom-flag_5": {
+        "name": "FDR Available",
+        "component": "binary_sensor",
+        "icon": "mdi:calendar-check",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'OFF' if (parts[2] | int(base=16)) | bitwise_and(32) else 'ON' }}{% else %}{{ none }}{% endif %}",
+        "entity_category": "diagnostic"
+    },
+    "custom-flag_6": {
+        "name": "Flow Available",
+        "component": "binary_sensor",
+        "icon": "mdi:water-check-outline",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'OFF' if (parts[2] | int(base=16)) | bitwise_and(64) else 'ON' }}{% else %}{{ none }}{% endif %}",
+        "entity_category": "diagnostic"
+    },
+    "custom-flag_7": {
+        "name": "Reserved",
+        "component": "binary_sensor",
+        "icon": "mdi:radiobox-blank",
+        "payload_on": "ON",
+        "payload_off": "OFF",
+        "value_template":"{% set parts = (value_json.get('manufacturer_specific') or '').split() %}{% if parts | length == 3 and parts[2] is match('^[0-9A-Fa-f]{2}$') %}{{ 'ON' if (parts[2] | int(base=16)) | bitwise_and(128) else 'OFF' }}{% else %}{{ none }}{% endif %}",
+        "entity_category": "diagnostic",
+        "enabled_by_default": false
+    }
+}
