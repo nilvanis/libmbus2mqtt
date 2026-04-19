@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
-    "typer>=0.9",
+    "typer>=0.24.1",
     "paho-mqtt>=2.0",
     "pyyaml>=6.0.3",
     "rich>=13.0",
@@ -33,9 +33,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "pytest-cov>=4.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.8",
-    "mypy>=1.0",
+    "mypy>=1.20.1",
     "types-PyYAML>=6.0",
 ]
 
