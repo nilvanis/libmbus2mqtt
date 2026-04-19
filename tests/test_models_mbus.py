@@ -198,6 +198,17 @@ class TestMbusData:
         data = MbusData(slave_information=slave_info)
         assert data.product_name == "M-Bus Device"
 
+    def test_raw_product_name_preserves_missing_value(self) -> None:
+        """Test raw_product_name does not use fallback."""
+        slave_info = SlaveInformation(
+            Id="123",
+            Manufacturer="TST",
+            Version="1",
+            Medium="Water",
+        )
+        data = MbusData(slave_information=slave_info)
+        assert data.raw_product_name is None
+
     def test_serial_number_property(
         self,
         sample_slave_info: SlaveInformation,
@@ -236,6 +247,18 @@ class TestMbusData:
         """Test get_record_value for missing record."""
         data = MbusData(slave_information=sample_slave_info)
         assert data.get_record_value("999") is None
+
+    def test_datarecord_count_property(
+        self,
+        sample_slave_info: SlaveInformation,
+        sample_data_records: dict[str, DataRecord],
+    ) -> None:
+        """Test datarecord_count returns the number of records."""
+        data = MbusData(
+            slave_information=sample_slave_info,
+            data_records=sample_data_records,
+        )
+        assert data.datarecord_count == 2
 
     def test_to_ha_state_basic(
         self,

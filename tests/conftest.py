@@ -44,7 +44,13 @@ def apator_xml() -> str:
 @pytest.fixture
 def itron_xml() -> str:
     """Load Itron Cyble XML fixture."""
-    return (FIXTURES_DIR / "itron_cyble.xml").read_text()
+    return (FIXTURES_DIR / "itron_cyble-dr8.xml").read_text()
+
+
+@pytest.fixture
+def itron_dr7_xml() -> str:
+    """Load Itron Cyble dr7 XML fixture."""
+    return (FIXTURES_DIR / "itron_cyble_dr7.xml").read_text()
 
 
 @pytest.fixture
@@ -68,7 +74,7 @@ def zenner_xml() -> str:
 @pytest.fixture(
     params=[
         ("apator", "apator_apt-mbus-na-1.xml"),
-        ("itron", "itron_cyble.xml"),
+        ("itron", "itron_cyble-dr8.xml"),
         ("kamstrup", "kamstrup_multical_401.xml"),
         ("bmeters", "bmeters_frm_mb1.xml"),
         ("zenner", "zenner_edc.xml"),
@@ -96,6 +102,12 @@ def apator_mbus_data(apator_xml: str) -> MbusData:
 def itron_mbus_data(itron_xml: str) -> MbusData:
     """Parsed MbusData from Itron fixture."""
     return parse_xml(itron_xml)
+
+
+@pytest.fixture
+def itron_dr7_mbus_data(itron_dr7_xml: str) -> MbusData:
+    """Parsed MbusData from Itron dr7 fixture."""
+    return parse_xml(itron_dr7_xml)
 
 
 @pytest.fixture
@@ -216,6 +228,7 @@ def mock_mqtt_client() -> MagicMock:
     client.publish_ha_discovery.return_value = True
     client.publish_device_state.return_value = True
     client.publish_device_availability.return_value = True
+    client.publish_entity_availability.return_value = True
     client.remove_ha_discovery.return_value = True
     return client
 
