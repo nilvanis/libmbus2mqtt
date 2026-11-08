@@ -10,6 +10,7 @@ from libmbus2mqtt.constants import (
     APP_NAME,
     APP_VERSION,
     HA_DEFAULT_DISCOVERY_PREFIX,
+    LOG_LEVELS,
     TOPIC_BRIDGE_STATE,
     TOPIC_DEVICE_AVAILABILITY,
     TOPIC_DEVICE_ENTITY_AVAILABILITY,
@@ -183,7 +184,7 @@ class HomeAssistantDiscovery:
             command_topic=f"{base}/command/log_level",
             state_topic=f"{base}/bridge/info",
             value_template="{{ value_json.log_level }}",
-            options=["DEBUG", "INFO", "WARNING", "ERROR"],
+            options=list(LOG_LEVELS),
             icon="mdi:text-box-outline",
             entity_category="config",
         )

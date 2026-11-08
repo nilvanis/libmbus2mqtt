@@ -6,6 +6,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from libmbus2mqtt.constants import (
+    LOG_LEVELS,
     TOPIC_COMMAND_LOG_LEVEL,
     TOPIC_COMMAND_POLL_INTERVAL,
     TOPIC_COMMAND_RESCAN,
@@ -64,9 +65,8 @@ class CommandHandler:
     def _handle_log_level(self, topic: str, payload: str) -> None:
         """Handle log level change command."""
         level = payload.strip().upper()
-        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR"]
 
-        if level not in valid_levels:
+        if level not in LOG_LEVELS:
             logger.warning(f"Invalid log level: {level}")
             return
 
