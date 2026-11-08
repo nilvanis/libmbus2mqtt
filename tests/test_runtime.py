@@ -1,6 +1,7 @@
 """Daemon startup with real storage/templates and simulated hardware/MQTT."""
 
 import json
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -9,6 +10,7 @@ import pytest
 from libmbus2mqtt.config import AppConfig, DeviceConfig, HomeAssistantConfig, MbusConfig, MqttConfig
 from libmbus2mqtt.main import Daemon
 from libmbus2mqtt.models.mbus import MbusData
+from libmbus2mqtt.mqtt.client import MqttClient
 
 
 def test_startup_polls_with_configured_storage_and_templates(
@@ -58,3 +60,42 @@ def test_startup_polls_with_configured_storage_and_templates(
     assert state["custom_0"] == apator_mbus_data.get_record_value("0")
     assert daemon._state_store is not None
     assert daemon._state_store.list_active_device_snapshots()[0].state == state
+
+
+@pytest.mark.parametrize(
+    "payload, expected", [(" debug ", "DEBUG"), ("INFO", "INFO"), ("TRACE", None)]
+)
+def test_log_level_command_publishes_state_without_waiting_for_poll(
+    minimal_app_config: AppConfig,
+    monkeypatch: pytest.MonkeyPatch,
+    payload: str,
+    expected: str | None,
+) -> None:
+    minimal_app_config.mqtt.base_topic = "test-meters"
+    monkeypatch.setattr(MqttClient, "connect", lambda self: None)
+    daemon = Daemon(minimal_app_config)
+    daemon._init_mqtt()
+    assert daemon._mqtt is not None
+    publish = MagicMock(return_value=True)
+    monkeypatch.setattr(daemon._mqtt, "publish", publish)
+    root_logger = logging.getLogger()
+    package_logger = logging.getLogger("libmbus2mqtt")
+    original_levels = root_logger.level, package_logger.level
+    try:
+        package_logger.setLevel(logging.INFO)
+        message = MagicMock(topic="test-meters/command/log_level", payload=payload.encode())
+        daemon._mqtt._on_message(MagicMock(), None, message)
+
+        if expected is None:
+            publish.assert_not_called()
+            assert package_logger.level == logging.INFO
+        else:
+            publish.assert_called_once()
+            topic, state = publish.call_args.args
+            assert topic == "test-meters/bridge/info"
+            assert json.loads(state)["log_level"] == expected
+            assert publish.call_args.kwargs["retain"] is True
+            assert package_logger.level == getattr(logging, expected)
+    finally:
+        root_logger.setLevel(original_levels[0])
+        package_logger.setLevel(original_levels[1])

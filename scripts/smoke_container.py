@@ -78,7 +78,7 @@ mbus:
   device: /dev/simulated-mbus
   autoscan: false
   startup_delay: 0
-  poll_interval: 1
+  poll_interval: 60
   retry_count: 0
 mqtt:
   host: broker
@@ -166,6 +166,21 @@ for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'm
             assert retained(f"libmbus2mqtt/device/{meter_id}/availability") == "online"
             assert json.loads(retained("homeassistant/sensor/+/config"))["device"]["identifiers"]
             assert retained("libmbus2mqtt/bridge/state") == "online"
+            for level in ["DEBUG", "INFO"]:
+                docker(
+                    "exec",
+                    broker,
+                    "mosquitto_pub",
+                    "-t",
+                    "libmbus2mqtt/command/log_level",
+                    "-m",
+                    level,
+                )
+                deadline = time.monotonic() + 5
+                while json.loads(retained("libmbus2mqtt/bridge/info"))["log_level"] != level:
+                    if time.monotonic() >= deadline:
+                        raise AssertionError(f"Log level {level} was not confirmed immediately")
+                    time.sleep(0.1)
             with closing(
                 sqlite3.connect(f"file:{runtime / 'libmbus2mqtt.db'}?mode=ro", uri=True)
             ) as conn:

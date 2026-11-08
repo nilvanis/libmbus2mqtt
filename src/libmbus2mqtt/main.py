@@ -150,6 +150,7 @@ class Daemon:
         self._command_handler = CommandHandler(self._mqtt)
         self._command_handler.on_rescan(self._request_rescan)
         self._command_handler.on_poll_interval_change(self._set_poll_interval)
+        self._command_handler.on_log_level_change(self._bridge_info.publish)
         self._command_handler.setup()
 
         # Initialize HA discovery if enabled

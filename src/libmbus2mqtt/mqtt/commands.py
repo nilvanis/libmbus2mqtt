@@ -25,6 +25,7 @@ class CommandHandler:
         self.mqtt = mqtt_client
         self._rescan_callback: Callable[[], None] | None = None
         self._poll_interval_callback: Callable[[int], None] | None = None
+        self._log_level_callback: Callable[[], object] | None = None
 
     def setup(self) -> None:
         """Register command callbacks with MQTT client."""
@@ -50,6 +51,10 @@ class CommandHandler:
         """Set callback for poll interval change."""
         self._poll_interval_callback = callback
 
+    def on_log_level_change(self, callback: Callable[[], object]) -> None:
+        """Set callback to confirm a log level change immediately."""
+        self._log_level_callback = callback
+
     def _handle_rescan(self, topic: str, payload: str) -> None:
         """Handle rescan command."""
         logger.info("Received rescan command")
@@ -67,6 +72,8 @@ class CommandHandler:
 
         logger.info(f"Setting log level to {level}")
         set_log_level(level)
+        if self._log_level_callback:
+            self._log_level_callback()
 
     def _handle_poll_interval(self, topic: str, payload: str) -> None:
         """Handle poll interval change command."""
