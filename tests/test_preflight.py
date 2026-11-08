@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from libmbus2mqtt.preflight import PreflightError, check_data_dir, check_serial_device
+from libmbus2mqtt.config import MqttTlsConfig
+from libmbus2mqtt.preflight import (
+    PreflightError,
+    check_data_dir,
+    check_serial_device,
+    check_tls_files,
+)
 
 needs_non_root = pytest.mark.skipif(
     os.geteuid() == 0, reason="root bypasses file permission checks"
@@ -74,3 +80,24 @@ def test_accessible_serial_device_passes(tmp_path: Path) -> None:
     device = tmp_path / "ttyUSB0"
     device.touch(mode=0o600)
     check_serial_device(str(device))
+
+
+def test_tls_files_are_ignored_when_tls_is_off(tmp_path: Path) -> None:
+    check_tls_files(MqttTlsConfig(ca_certs=tmp_path / "missing.crt"))
+
+
+def test_missing_tls_file_is_reported(tmp_path: Path) -> None:
+    with pytest.raises(PreflightError, match=r"mqtt\.tls\.ca_certs: .* does not exist"):
+        check_tls_files(MqttTlsConfig(enabled=True, ca_certs=tmp_path / "missing.crt"))
+
+
+@needs_non_root
+def test_unreadable_tls_key_is_reported(tmp_path: Path) -> None:
+    certfile = tmp_path / "client.crt"
+    keyfile = tmp_path / "client.key"
+    certfile.touch(mode=0o644)
+    keyfile.touch(mode=0o000)
+    tls = MqttTlsConfig(enabled=True, certfile=certfile, keyfile=keyfile)
+
+    with pytest.raises(PreflightError, match=r"mqtt\.tls\.keyfile: .* is not readable"):
+        check_tls_files(tls)

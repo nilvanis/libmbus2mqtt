@@ -65,3 +65,10 @@ def test_find_executable_fails_without_a_command(
 
     with pytest.raises(FileNotFoundError, match="Cannot locate"):
         installer.find_executable()
+
+
+def test_libmbus_pin_is_a_release_commit() -> None:
+    repo, commit = installer.get_libmbus_source()
+    assert repo == "https://github.com/rscada/libmbus.git"
+    assert len(commit) == 40 and all(c in "0123456789abcdef" for c in commit)
+    assert installer.get_libmbus_version().count(".") == 2

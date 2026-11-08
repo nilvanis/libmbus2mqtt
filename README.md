@@ -280,13 +280,19 @@ mbus:
 # MQTT Broker
 mqtt:
   host: 192.168.1.100           # REQUIRED - Broker IP or hostname
-  port: 1883                    # Broker port
+  port: 1883                    # Broker port (default: 1883, or 8883 with TLS)
   username:                     # Username (if required)
   password:                     # Password (if required)
   client_id:                    # Client ID (auto-generated if empty)
   keepalive: 60                 # Connection keepalive in seconds
   qos: 1                        # Message quality of service (0, 1, or 2)
   base_topic: libmbus2mqtt      # Base MQTT topic
+  tls:                          # 
+    enabled: false              # Enable TLS encryption
+    ca_certs:                   # Use specific CA cert (empty/default: system CAs)
+    certfile:                   # Client certificate, if the broker requires one (empty - do not use)
+    keyfile:                    # Client private key, if not included in certfile
+    insecure: false             # true = don't verify the broker certificate (accepts self-signed)
 
 # Home Assistant Integration
 homeassistant:
@@ -337,6 +343,11 @@ LIBMBUS2MQTT_MQTT_CLIENT_ID
 LIBMBUS2MQTT_MQTT_KEEPALIVE
 LIBMBUS2MQTT_MQTT_QOS
 LIBMBUS2MQTT_MQTT_BASE_TOPIC
+LIBMBUS2MQTT_MQTT_TLS_ENABLED
+LIBMBUS2MQTT_MQTT_TLS_CA_CERTS
+LIBMBUS2MQTT_MQTT_TLS_CERTFILE
+LIBMBUS2MQTT_MQTT_TLS_KEYFILE
+LIBMBUS2MQTT_MQTT_TLS_INSECURE
 LIBMBUS2MQTT_HOMEASSISTANT_ENABLED
 LIBMBUS2MQTT_HOMEASSISTANT_DISCOVERY_PREFIX
 LIBMBUS2MQTT_AVAILABILITY_TIMEOUT_POLLS

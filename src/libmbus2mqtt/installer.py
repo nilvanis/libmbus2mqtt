@@ -22,14 +22,24 @@ if TYPE_CHECKING:
 console = Console()
 
 
-def get_libmbus_source() -> tuple[str, str]:
-    """Read the source pin shared with Docker from the installed package."""
-    settings = dict(
+def _libmbus_settings() -> dict[str, str]:
+    """Parse the libmbus pin shared with Docker from the installed package."""
+    return dict(
         line.split("=", 1)
         for line in files("libmbus2mqtt").joinpath("resources/libmbus.env").read_text().splitlines()
         if line and not line.startswith("#")
     )
+
+
+def get_libmbus_source() -> tuple[str, str]:
+    """Return the libmbus repository and the pinned commit."""
+    settings = _libmbus_settings()
     return settings["LIBMBUS_REPO"], settings["LIBMBUS_COMMIT"]
+
+
+def get_libmbus_version() -> str:
+    """Return the libmbus release the pinned commit belongs to."""
+    return _libmbus_settings()["LIBMBUS_VERSION"]
 
 
 def prepare_libmbus_source(repo_dir: Path, *, dry_run: bool = False) -> None:

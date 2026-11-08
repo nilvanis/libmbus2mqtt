@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 from rich.console import Console
@@ -13,6 +13,9 @@ from rich.table import Table
 
 from libmbus2mqtt.constants import APP_NAME, APP_VERSION, DEFAULT_CONFIG_FILE, DEFAULT_DATA_DIR
 from libmbus2mqtt.mbus.utils import check_tcp_connectivity, parse_mbus_device
+
+if TYPE_CHECKING:
+    from libmbus2mqtt.config import MqttTlsConfig
 
 app = typer.Typer(
     name=APP_NAME,
@@ -81,15 +84,24 @@ def _print_config_permission_error(config_path: Path) -> None:
     )
 
 
-def _run_preflight(device: str, data_dir: Path | None = None) -> None:
-    """Fail fast with an actionable message when storage or the device is inaccessible."""
+def _run_preflight(
+    device: str, data_dir: Path | None = None, tls: MqttTlsConfig | None = None
+) -> None:
+    """Fail fast with an actionable message when storage, device or TLS files are inaccessible."""
     from libmbus2mqtt.logging import get_logger
-    from libmbus2mqtt.preflight import PreflightError, check_data_dir, check_serial_device
+    from libmbus2mqtt.preflight import (
+        PreflightError,
+        check_data_dir,
+        check_serial_device,
+        check_tls_files,
+    )
 
     try:
         if data_dir is not None:
             check_data_dir(data_dir)
         check_serial_device(device)
+        if tls is not None:
+            check_tls_files(tls)
     except PreflightError as e:
         get_logger("preflight").error(str(e))
         raise typer.Exit(1) from None
@@ -158,12 +170,16 @@ def run(
         logs_config=app_config.logs,
         default_log_file=data_dir / "log" / f"{APP_NAME}.log",
     )
-    _run_preflight(app_config.mbus.device, data_dir)
+    _run_preflight(app_config.mbus.device, data_dir, tls=app_config.mqtt.tls)
 
     # Import and run main loop
     from libmbus2mqtt.main import run_daemon
 
-    run_daemon(app_config, data_dir=data_dir)
+    try:
+        run_daemon(app_config, data_dir=data_dir)
+    except ConnectionError:
+        # Already logged with the cause; a traceback adds nothing for the operator.
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -741,6 +757,7 @@ def libmbus_install(
         confirm_action,
         find_libmbus_binaries,
         get_libmbus_source,
+        get_libmbus_version,
         is_libmbus_installed,
         prepare_libmbus_source,
         require_root,
@@ -803,7 +820,10 @@ def libmbus_install(
     # Show plan and confirm
     console.print("This will:")
     source_repo, source_commit = get_libmbus_source()
-    console.print(f"  1. Fetch {source_repo} at {source_commit} and apply the TCP timeout patch")
+    console.print(
+        f"  1. Fetch libmbus {get_libmbus_version()} ({source_repo} at {source_commit[:12]}) "
+        "and apply the TCP timeout patch"
+    )
     console.print("  2. Build libmbus in a new private temporary directory")
     console.print(f"  3. Install binaries to {install_path}")
     console.print(f"     - {', '.join(LIBMBUS_BINARIES)}")

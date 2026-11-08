@@ -10,10 +10,14 @@ from __future__ import annotations
 import os
 import stat
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from libmbus2mqtt.constants import DEFAULT_DB_FILE
 from libmbus2mqtt.logging import get_logger
 from libmbus2mqtt.mbus.utils import parse_mbus_device
+
+if TYPE_CHECKING:
+    from libmbus2mqtt.config import MqttTlsConfig
 
 logger = get_logger("preflight")
 
@@ -67,6 +71,28 @@ def check_data_dir(data_dir: Path) -> None:
             f"State database {describe_path(db_file)} is not readable and writable. "
             f"Running as {process_identity()}. {_DATA_DIR_HINT}"
         )
+
+
+def check_tls_files(tls: MqttTlsConfig) -> None:
+    """Ensure the configured TLS certificate and key files can be read."""
+    if not tls.enabled:
+        return
+    for option, path in (
+        ("ca_certs", tls.ca_certs),
+        ("certfile", tls.certfile),
+        ("keyfile", tls.keyfile),
+    ):
+        if path is None:
+            continue
+        if not path.is_file():
+            raise PreflightError(f"mqtt.tls.{option}: {path} does not exist or is not a file.")
+        if not os.access(path, os.R_OK):
+            raise PreflightError(
+                f"mqtt.tls.{option}: {describe_path(path)} is not readable. "
+                f"Running as {process_identity()}. In Docker, keep the files inside the "
+                "data directory (e.g. data/config/certs/) so the entrypoint hands them to "
+                "PUID:PGID; natively, make them readable by the service user."
+            )
 
 
 def check_serial_device(device: str) -> None:

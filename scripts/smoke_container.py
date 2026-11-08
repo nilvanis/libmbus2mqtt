@@ -8,7 +8,10 @@ Scenarios:
   files left by the pre-2.2 uid 999) for PUID/PGID and drops privileges;
 - hardened: `--user` with a read-only root filesystem and no capabilities, also
   checking that SIGTERM ends the startup delay immediately;
-- unwritable /data: startup fails with an actionable message instead of a traceback.
+- unwritable /data: startup fails with an actionable message instead of a traceback;
+- MQTT over TLS with a client certificate (mutual TLS), and a clear error when the
+  broker certificate is signed by an unknown CA;
+- `insecure: true` against a self-signed broker certificate for another host name.
 """
 
 from __future__ import annotations
@@ -65,6 +68,85 @@ def assert_unprivileged(container: str, uid: int, gid: int) -> dict[str, str]:
     return status
 
 
+def make_certificates(directory: Path) -> None:
+    """Throwaway CA, broker certificate for the host name "broker", client cert, other CA,
+    and a self-signed broker certificate for a name other than "broker"."""
+    directory.mkdir()
+
+    def openssl(*args: str) -> None:
+        subprocess.run(["openssl", *args], cwd=directory, check=True, capture_output=True)
+
+    for ca in ("ca", "wrong-ca"):
+        openssl(
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            "2",
+            "-keyout",
+            f"{ca}.key",
+            "-out",
+            f"{ca}.crt",
+            "-subj",
+            f"/CN=smoke {ca}",
+        )
+    (directory / "server.ext").write_text("subjectAltName=DNS:broker\n")
+    for serial, (leaf, subject) in enumerate(
+        (("server", "/CN=broker"), ("client", "/CN=libmbus2mqtt")), start=1
+    ):
+        openssl(
+            "req",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-keyout",
+            f"{leaf}.key",
+            "-out",
+            f"{leaf}.csr",
+            "-subj",
+            subject,
+        )
+        extra = ["-extfile", "server.ext"] if leaf == "server" else []
+        openssl(
+            "x509",
+            "-req",
+            "-in",
+            f"{leaf}.csr",
+            "-CA",
+            "ca.crt",
+            "-CAkey",
+            "ca.key",
+            "-set_serial",
+            str(serial),
+            "-days",
+            "2",
+            "-out",
+            f"{leaf}.crt",
+            *extra,
+        )
+    openssl(
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-days",
+        "2",
+        "-keyout",
+        "self-signed.key",
+        "-out",
+        "self-signed.crt",
+        "-subj",
+        "/CN=mosquitto.invalid",
+    )
+    directory.chmod(0o755)
+    # The broker runs as uid 1883 and must read its keys; these are test-only keys.
+    for key in ("server.key", "self-signed.key"):
+        (directory / key).chmod(0o644)
+
+
 def wait_for_log(container: str, text: str, timeout: float = 30) -> None:
     deadline = time.monotonic() + timeout
     while True:
@@ -88,6 +170,7 @@ def main() -> None:
     assert meter_id is not None and record_value is not None
     name = f"libmbus2mqtt-smoke-{uuid.uuid4().hex[:12]}"
     broker, daemon, hardened = f"{name}-broker", f"{name}-daemon", f"{name}-hardened"
+    tls_daemon, insecure_daemon = f"{name}-tls", f"{name}-insecure"
     uid, gid = os.getuid(), os.getgid()
     serial = Path("/dev/ttyS0")
     serial_gid = serial.stat().st_gid if serial.is_char_device() else None
@@ -108,8 +191,19 @@ def main() -> None:
         adapter = work / "mbus-serial-request-data"
         adapter.write_text("#!/bin/sh\ncat /smoke/payload.xml\n")
         adapter.chmod(0o755)
+        certs = work / "certs"
+        make_certificates(certs)
+        tls_data = work / "tls-data"
+        tls_data.mkdir()
+        insecure_data = work / "insecure-data"
+        insecure_data.mkdir()
         (work / "mosquitto.conf").write_text(
             "listener 1883\nallow_anonymous true\npersistence false\nlog_dest stdout\n"
+            "listener 8883\ncafile /mosquitto/certs/ca.crt\n"
+            "certfile /mosquitto/certs/server.crt\nkeyfile /mosquitto/certs/server.key\n"
+            "require_certificate true\n"
+            "listener 8884\ncertfile /mosquitto/certs/self-signed.crt\n"
+            "keyfile /mosquitto/certs/self-signed.key\n"
         )
         (templates / "index.json").write_text(
             json.dumps(
@@ -130,6 +224,23 @@ def main() -> None:
         )
         (data / "config/config.yaml").write_text(CONFIG.format(startup_delay=0))
         (work / "config-delay.yaml").write_text(CONFIG.format(startup_delay=300))
+        # No port: TLS defaults to 8883, where the broker requires a client certificate.
+        (work / "config-tls.yaml").write_text(
+            CONFIG.format(startup_delay=0).replace(
+                "mqtt:\n  host: broker\n",
+                "mqtt:\n  host: broker\n  base_topic: tlssmoke\n  tls:\n    enabled: true\n"
+                "    ca_certs: /smoke/certs/ca.crt\n    certfile: /smoke/certs/client.crt\n"
+                "    keyfile: /smoke/certs/client.key\n",
+            )
+        )
+        # Self-signed certificate for another name, no CA given: only insecure connects.
+        (work / "config-insecure.yaml").write_text(
+            CONFIG.format(startup_delay=0).replace(
+                "mqtt:\n  host: broker\n",
+                "mqtt:\n  host: broker\n  port: 8884\n  base_topic: insecuresmoke\n"
+                "  tls:\n    enabled: true\n    insecure: true\n",
+            )
+        )
 
         def as_root(*command: str) -> None:
             docker(
@@ -192,6 +303,8 @@ for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'm
                 "1883:1883",
                 "--mount",
                 f"type=bind,source={work / 'mosquitto.conf'},target=/mosquitto/config/mosquitto.conf,readonly",
+                "--mount",
+                f"type=bind,source={certs},target=/mosquitto/certs,readonly",
                 broker_image,
             )
             deadline = time.monotonic() + 20
@@ -340,18 +453,78 @@ for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'm
             assert "Data directory /data" in output and "is not writable" in output, output
             assert "uid=4242" in output, output
             assert "Traceback" not in output, output
+
+            # MQTT over TLS with a client certificate; the config path comes from the env.
+            tls_run = [
+                *common,
+                "--env",
+                f"PUID={uid}",
+                "--env",
+                f"PGID={gid}",
+                "--env",
+                "LIBMBUS2MQTT_CONFIG=/smoke/config-tls.yaml",
+                "--mount",
+                f"type=bind,source={tls_data},target=/data",
+            ]
+            docker("run", "--detach", "--name", tls_daemon, *tls_run, image)
+            # No user templates here: the bundled Apator template maps record 0.
+            state = json.loads(retained(f"tlssmoke/device/{meter_id}/state"))
+            assert state["fabrication_number"] == record_value, state
+            wait_for_log(tls_daemon, "MQTT over TLS (CA: /smoke/certs/ca.crt")
+            docker("stop", "--time", "10", tls_daemon)
+
+            # A broker certificate from an unknown CA: a clear error, no traceback.
+            failed = docker(
+                "run",
+                "--rm",
+                *tls_run,
+                "--env",
+                "LIBMBUS2MQTT_MQTT_TLS_CA_CERTS=/smoke/certs/wrong-ca.crt",
+                image,
+                check=False,
+            )
+            output = failed.stdout + failed.stderr
+            assert failed.returncode == 1, output
+            assert "TLS connection to broker:8883 failed" in output, output
+            assert "certificate verify failed" in output, output
+            assert "Traceback" not in output, output
+
+            # insecure: true accepts a self-signed certificate issued for another name.
+            docker(
+                "run",
+                "--detach",
+                "--name",
+                insecure_daemon,
+                *common,
+                "--env",
+                f"PUID={uid}",
+                "--env",
+                f"PGID={gid}",
+                "--env",
+                "LIBMBUS2MQTT_CONFIG=/smoke/config-insecure.yaml",
+                "--mount",
+                f"type=bind,source={insecure_data},target=/data",
+                image,
+            )
+            state = json.loads(retained(f"insecuresmoke/device/{meter_id}/state"))
+            assert state["fabrication_number"] == record_value, state
+            wait_for_log(insecure_daemon, "without verifying the broker certificate")
+            docker("stop", "--time", "10", insecure_daemon)
             print(
                 "Container ownership/privilege drop, hardened mode, startup checks, "
-                "/data storage, file logs, templates, MQTT, and shutdown: OK"
+                "/data storage, file logs, templates, MQTT, MQTT over TLS (verified and insecure), "
+                "and shutdown: OK"
             )
         except Exception:
-            for container in (daemon, hardened):
+            for container in (daemon, hardened, tls_daemon, insecure_daemon):
                 logs = docker("logs", container, check=False)
                 print(logs.stdout, logs.stderr, file=sys.stderr)
             print(docker("logs", broker, check=False).stderr, file=sys.stderr)
             raise
         finally:
-            docker("rm", "--force", daemon, hardened, broker, check=False)
+            docker(
+                "rm", "--force", daemon, hardened, tls_daemon, insecure_daemon, broker, check=False
+            )
             docker("network", "rm", name, check=False)
             # Hand anything a failed run left behind back to the host user for cleanup.
             docker(
