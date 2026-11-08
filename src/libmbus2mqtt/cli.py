@@ -33,7 +33,7 @@ ConfigOption = Annotated[
     typer.Option(
         "--config",
         "-c",
-        help="Path to configuration file",
+        help=f"Path to configuration file [default: {DEFAULT_CONFIG_FILE}]",
         envvar="LIBMBUS2MQTT_CONFIG",
     ),
 ]
@@ -50,8 +50,25 @@ LogLevelOption = Annotated[
 
 DataDirOption = Annotated[
     Path,
-    typer.Option("--data-dir", help="Directory for the database, user templates and log files"),
+    typer.Option(
+        "--data-dir",
+        help="Directory for the database, user templates and log files",
+        envvar="LIBMBUS2MQTT_DATA_DIR",
+    ),
 ]
+
+
+def _write_example_config(path: Path) -> None:
+    """Write the example config, private to its owner: it will hold MQTT credentials."""
+    from libmbus2mqtt.config import generate_example_config
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(generate_example_config())
+    # O_CREAT's mode does not apply to an existing file overwritten with --force.
+    with contextlib.suppress(OSError):
+        path.chmod(0o600)
 
 
 def _print_config_permission_error(config_path: Path) -> None:
@@ -315,8 +332,10 @@ def install(
         SYSTEMD_SERVICE_NAME,
     )
     from libmbus2mqtt.installer import (
+        check_service_executable,
         confirm_action,
-        get_service_content,
+        find_executable,
+        render_service,
         require_root,
         run_command,
         user_exists,
@@ -331,14 +350,30 @@ def install(
     if dry_run:
         console.print("[yellow]Dry-run mode - no changes will be made[/yellow]\n")
 
+    # The unit runs the same libmbus2mqtt as this command; make sure systemd can.
+    try:
+        executable = find_executable()
+    except FileNotFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
+    problem = check_service_executable(executable)
+    if problem:
+        console.print(f"[red]Error:[/red] {problem}")
+        raise typer.Exit(1)
+
+    service_config = SERVICE_CONFIG_DIR / "config.yaml"
+
     # Show what will be done and confirm
     console.print("This will:")
     console.print(f"  1. Create service user '{SERVICE_USER}' (if not exists)")
-    console.print(f"  2. Create directory {SERVICE_CONFIG_DIR}")
+    console.print(f"  2. Create {service_config} from the example (an existing file is kept)")
     console.print(f"  3. Create directory {SERVICE_DATA_DIR}")
-    console.print(f"  4. Install service file to {SYSTEMD_SERVICE_DIR / SYSTEMD_SERVICE_NAME}")
+    console.print(
+        f"  4. Install service file to {SYSTEMD_SERVICE_DIR / SYSTEMD_SERVICE_NAME} "
+        f"(runs {executable})"
+    )
     console.print("  5. Reload systemd daemon")
-    console.print("  6. Enable the service\n")
+    console.print("  6. Enable the service (it is not started)\n")
 
     if not confirm_action("Proceed with installation?", default=True, yes=yes):
         console.print("[yellow]Installation cancelled[/yellow]")
@@ -347,7 +382,7 @@ def install(
     console.print()
 
     # Resolve the packaged unit before making any system changes.
-    service_content = get_service_content()
+    service_content = render_service(executable)
 
     # Create service user
     if not user_exists(SERVICE_USER):
@@ -362,13 +397,19 @@ def install(
     else:
         console.print(f"  [dim]User '{SERVICE_USER}' already exists[/dim]")
 
-    # Create config directory
-    console.print(f"Creating {SERVICE_CONFIG_DIR}...")
-    if dry_run:
+    # Create the config the service reads. ProtectSystem=strict keeps /etc read-only
+    # for the service, so owning the file only lets it read the MQTT credentials.
+    console.print(f"Creating {service_config}...")
+    config_created = not service_config.exists()
+    if not config_created:
+        console.print(f"  [dim]Keeping existing {service_config}[/dim]")
+    elif dry_run:
         run_command(["mkdir", "-p", str(SERVICE_CONFIG_DIR)], dry_run=True)
+        console.print(f"  Would write the example config (mode 0600, owner {SERVICE_USER})")
     else:
-        SERVICE_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        console.print(f"  [green]Created {SERVICE_CONFIG_DIR}[/green]")
+        _write_example_config(service_config)
+        shutil.chown(service_config, user=SERVICE_USER)
+        console.print(f"  [green]Created {service_config}[/green]")
 
     # Create data directory with proper ownership
     console.print(f"Creating {SERVICE_DATA_DIR}...")
@@ -413,20 +454,17 @@ def install(
         console.print("[green]Installation complete![/green]")
         console.print()
         console.print("Next steps:")
-        service_config = SERVICE_CONFIG_DIR / "config.yaml"
+        action = "start" if config_created else "restart"
+        console.print(f"  1. Edit config:     [bold]sudo nano {service_config}[/bold]")
         console.print(
-            f"  1. Create config: [bold]sudo libmbus2mqtt config init -c {service_config}[/bold]"
+            f"  2. Test (optional): [bold]sudo -u {SERVICE_USER} {executable} device-info[/bold]"
         )
         console.print(
-            f"  2. Let the service read it (file is private, mode 0600): "
-            f"[bold]sudo chown {SERVICE_USER} {service_config}[/bold]"
-        )
-        console.print(f"  3. Edit config:   [bold]sudo nano {service_config}[/bold]")
-        console.print(
-            f"  4. Start service: [bold]sudo systemctl start {SYSTEMD_SERVICE_NAME}[/bold]"
+            f"  3. {action.capitalize()} service: "
+            f"[bold]sudo systemctl {action} {SYSTEMD_SERVICE_NAME}[/bold]"
         )
         console.print(
-            f"  5. Check status:  [bold]sudo systemctl status {SYSTEMD_SERVICE_NAME}[/bold]"
+            f"  4. Follow logs:     [bold]sudo journalctl -u {SYSTEMD_SERVICE_NAME} -f[/bold]"
         )
 
 
@@ -616,8 +654,6 @@ def config_init(
     ] = False,
 ) -> None:
     """Generate example configuration file."""
-    from libmbus2mqtt.config import generate_example_config
-
     config_path = Path(config) if config else DEFAULT_CONFIG_FILE
 
     if config_path.exists() and not force:
@@ -625,15 +661,13 @@ def config_init(
         console.print("Use [bold]--force[/bold] to overwrite")
         raise typer.Exit(1)
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # The file holds MQTT credentials once edited: keep it private to its owner.
-    fd = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(generate_example_config())
-    # O_CREAT's mode does not apply to an existing file overwritten with --force.
-    with contextlib.suppress(OSError):
-        config_path.chmod(0o600)
+    try:
+        _write_example_config(config_path)
+    except OSError as e:
+        console.print(f"[red]Error:[/red] Cannot write {config_path}: {e.strerror or e}")
+        if isinstance(e, PermissionError):
+            console.print("Run it with sudo, or pass a writable path with --config.")
+        raise typer.Exit(1) from None
 
     console.print(f"[green]Configuration file created:[/green] {config_path}")
     console.print("\nEdit the file and set required values:")

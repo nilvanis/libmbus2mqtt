@@ -8,11 +8,13 @@ from libmbus2mqtt._version import __version__
 APP_NAME = "libmbus2mqtt"
 APP_VERSION = __version__
 
-# Paths
-DEFAULT_DATA_DIR = Path("/data")
-CONFIG_DIR = DEFAULT_DATA_DIR / "config"
+# Paths. Defaults follow the native (systemd) layout; the Docker image points the
+# CLI at /data through LIBMBUS2MQTT_CONFIG and LIBMBUS2MQTT_DATA_DIR.
+SERVICE_CONFIG_DIR = Path("/etc/libmbus2mqtt")
+SERVICE_DATA_DIR = Path("/var/lib/libmbus2mqtt")
+DEFAULT_CONFIG_FILE = SERVICE_CONFIG_DIR / "config.yaml"
+DEFAULT_DATA_DIR = SERVICE_DATA_DIR
 TEMPLATES_DIR = DEFAULT_DATA_DIR / "templates"
-DEFAULT_CONFIG_FILE = CONFIG_DIR / "config.yaml"
 DEFAULT_DB_FILE = DEFAULT_DATA_DIR / "libmbus2mqtt.db"
 
 # M-Bus
@@ -65,10 +67,6 @@ SYSTEMD_SERVICE_DIR = Path("/etc/systemd/system")
 # Service user/group
 SERVICE_USER = "libmbus2mqtt"
 SERVICE_GROUP = "dialout"
-
-# Service directories
-SERVICE_CONFIG_DIR = Path("/etc/libmbus2mqtt")
-SERVICE_DATA_DIR = Path("/var/lib/libmbus2mqtt")
 
 # Logging (fixed format, not user-configurable)
 LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"

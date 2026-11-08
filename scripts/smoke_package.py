@@ -80,6 +80,7 @@ import logging
 import libmbus2mqtt
 from libmbus2mqtt.cli import run
 from libmbus2mqtt.config import AppConfig
+from libmbus2mqtt.constants import DEFAULT_CONFIG_FILE, DEFAULT_DATA_DIR
 from libmbus2mqtt.installer import get_libmbus_source, get_service_content
 from libmbus2mqtt.main import Daemon
 from libmbus2mqtt.templates import load_template
@@ -89,6 +90,8 @@ assert Path(libmbus2mqtt.__file__).is_relative_to(Path('venv').resolve())
 assert 'StateDirectory=libmbus2mqtt' in get_service_content()
 assert '--data-dir /var/lib/libmbus2mqtt' in get_service_content()
 assert 'LIBMBUS2MQTT_DATA_DIR' not in get_service_content()
+assert DEFAULT_CONFIG_FILE == Path('/etc/libmbus2mqtt/config.yaml')
+assert DEFAULT_DATA_DIR == Path('/var/lib/libmbus2mqtt')
 assert len(get_libmbus_source()[1]) == 40
 assert files('libmbus2mqtt').joinpath('resources/libmbus-tcp-timeout.patch').is_file()
 assert load_template('apt-mbus-na-1.json') is not None

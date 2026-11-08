@@ -58,8 +58,12 @@ RUN groupadd --gid "$APP_GID" libmbus2mqtt && \
     install -d -o "$APP_UID" -g "$APP_GID" -m 0750 \
         /data /data/config /data/log /data/templates
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# CLI defaults are the native /etc + /var/lib paths; every command in the image
+# (run, scan, config init, ...) uses /data instead.
 ENV PUID=$APP_UID \
-    PGID=$APP_GID
+    PGID=$APP_GID \
+    LIBMBUS2MQTT_CONFIG=/data/config/config.yaml \
+    LIBMBUS2MQTT_DATA_DIR=/data
 VOLUME ["/data"]
 ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["run", "--config", "/data/config/config.yaml", "--data-dir", "/data"]
+CMD ["run"]

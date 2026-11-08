@@ -166,8 +166,9 @@ def main() -> None:
                 "-c",
                 """
 import os, subprocess
-assert 'LIBMBUS2MQTT_DATA_DIR' not in os.environ
-assert 'LIBMBUS2MQTT_CONFIG' not in os.environ
+# CLI defaults are the native paths; the image redirects every command to /data.
+assert os.environ['LIBMBUS2MQTT_DATA_DIR'] == '/data'
+assert os.environ['LIBMBUS2MQTT_CONFIG'] == '/data/config/config.yaml'
 for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'mbus-tcp-request-data']:
     result = subprocess.run([name], capture_output=True, timeout=5)
     assert result.returncode in (0, 1), (name, result.stderr)
@@ -268,6 +269,24 @@ for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'm
                 st = path.lstat()
                 assert (st.st_uid, st.st_gid) == (uid, gid), f"{path} not owned by {uid}:{gid}"
                 assert not stat.S_IMODE(st.st_mode) & 0o007, f"{path} is accessible to others"
+
+            # One-off commands find /data/config/config.yaml without any flags.
+            validated = docker(
+                "run",
+                "--rm",
+                "--env",
+                f"PUID={uid}",
+                "--env",
+                f"PGID={gid}",
+                "--mount",
+                f"type=bind,source={data},target=/data",
+                image,
+                "config",
+                "validate",
+            )
+            assert "Configuration is valid: /data/config/config.yaml" in validated.stdout, (
+                validated.stdout
+            )
 
             # Hardened mode: never root, read-only rootfs, no capabilities.
             docker(

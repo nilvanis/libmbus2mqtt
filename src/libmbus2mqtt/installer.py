@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import os
 import pwd
+import re
 import shutil
 import subprocess
+import sys
 from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from libmbus2mqtt.constants import LIBMBUS_BINARIES, LIBMBUS_DEFAULT_INSTALL_PATH
+from libmbus2mqtt.constants import APP_NAME, LIBMBUS_BINARIES, LIBMBUS_DEFAULT_INSTALL_PATH
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -47,6 +49,53 @@ def prepare_libmbus_source(repo_dir: Path, *, dry_run: bool = False) -> None:
 def get_service_content() -> str:
     """Read the systemd unit included in both wheel and source installations."""
     return files("libmbus2mqtt").joinpath("resources/libmbus2mqtt.service").read_text()
+
+
+# Hidden from the service by ProtectHome=yes in the bundled unit.
+_SERVICE_HIDDEN_DIRS = (Path("/home"), Path("/root"), Path("/run/user"))
+
+
+def find_executable() -> Path:
+    """Locate the libmbus2mqtt command the service should run: the one running now."""
+    candidates = [Path(sys.argv[0]), Path(sys.executable).parent / APP_NAME]
+    on_path = shutil.which(APP_NAME)
+    if on_path:
+        candidates.append(Path(on_path))
+    for candidate in candidates:
+        if candidate.name == APP_NAME and candidate.is_file() and os.access(candidate, os.X_OK):
+            # Not resolve(): keep a /usr/local/bin symlink as the stable path in the unit.
+            return candidate.absolute()
+    msg = f"Cannot locate the {APP_NAME} executable; run this command through it."
+    raise FileNotFoundError(msg)
+
+
+def check_service_executable(executable: Path) -> str | None:
+    """Explain why the systemd service could not run ``executable``, or return None."""
+    if any(char.isspace() for char in str(executable)):
+        return f"{executable} contains whitespace, which ExecStart= does not accept unquoted."
+    resolved = executable.resolve()
+    if any(resolved.is_relative_to(hidden) for hidden in _SERVICE_HIDDEN_DIRS):
+        return (
+            f"{executable} resolves to {resolved}, which the service cannot access "
+            "(ProtectHome=yes). Install libmbus2mqtt system-wide, e.g. in a virtualenv "
+            "under /opt/libmbus2mqtt."
+        )
+    return None
+
+
+def render_service(executable: Path) -> str:
+    """Return the bundled unit with ExecStart pointing at ``executable``."""
+    rendered, count = re.subn(
+        r"^ExecStart=\S+",
+        lambda _match: f"ExecStart={executable}",
+        get_service_content(),
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if count != 1:
+        msg = "Bundled service file has no ExecStart= line"
+        raise RuntimeError(msg)
+    return rendered
 
 
 def is_root() -> bool:

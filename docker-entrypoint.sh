@@ -7,7 +7,7 @@
 # device access are then the operator's responsibility.
 set -eu
 
-DATA_DIR=/data
+DATA_DIR="${LIBMBUS2MQTT_DATA_DIR:-/data}"
 umask 027
 
 if [ "$(id -u)" != 0 ]; then
@@ -33,6 +33,15 @@ if ! is_uint "$PUID" || ! is_uint "$PGID"; then
     log "PUID and PGID must be numeric (got PUID='$PUID' PGID='$PGID')"
     exit 64
 fi
+
+# Ownership is changed recursively below: refuse anything but a real subdirectory.
+case "$DATA_DIR" in
+    /?*) ;;
+    *)
+        log "LIBMBUS2MQTT_DATA_DIR must be an absolute path other than / (got '$DATA_DIR')"
+        exit 64
+        ;;
+esac
 
 if [ "$PUID" = 0 ]; then
     log "WARNING: PUID=0, running libmbus2mqtt as root"
