@@ -649,13 +649,11 @@ def libmbus_install(
     """Install libmbus from source (native installation)."""
     import shutil
     import subprocess
+    import tempfile
 
     from rich.progress import Progress, SpinnerColumn, TextColumn
 
-    from libmbus2mqtt.constants import (
-        LIBMBUS_BINARIES,
-        LIBMBUS_BUILD_DIR,
-    )
+    from libmbus2mqtt.constants import LIBMBUS_BINARIES
     from libmbus2mqtt.installer import (
         check_command_available,
         confirm_action,
@@ -724,7 +722,7 @@ def libmbus_install(
     console.print("This will:")
     source_repo, source_commit = get_libmbus_source()
     console.print(f"  1. Fetch {source_repo} at {source_commit} and apply the TCP timeout patch")
-    console.print(f"  2. Build libmbus in {LIBMBUS_BUILD_DIR}")
+    console.print("  2. Build libmbus in a new private temporary directory")
     console.print(f"  3. Install binaries to {install_path}")
     console.print(f"     - {', '.join(LIBMBUS_BINARIES)}")
     console.print("  4. Install libraries to /usr/local/lib")
@@ -738,16 +736,13 @@ def libmbus_install(
 
     console.print()
 
-    # Create and clean build directory
-    build_dir = LIBMBUS_BUILD_DIR
+    # Build as root in a fresh mkdtemp() directory (mode 0700): a fixed /tmp path could
+    # be pre-created or swapped by another local user to inject code into the build.
+    if dry_run:
+        build_dir = Path(tempfile.gettempdir()) / "libmbus-build-XXXXXXXX"
+    else:
+        build_dir = Path(tempfile.mkdtemp(prefix="libmbus-build-"))
     repo_dir = build_dir / "libmbus"
-
-    if build_dir.exists() and not dry_run:
-        console.print(f"Cleaning existing build directory {build_dir}...")
-        shutil.rmtree(build_dir)
-
-    if not dry_run:
-        build_dir.mkdir(parents=True, exist_ok=True)
 
     # Clone repository
     console.print("Preparing pinned libmbus sources...")
@@ -837,6 +832,8 @@ def libmbus_install(
         console.print("Cleaning up build directory...")
         shutil.rmtree(build_dir, ignore_errors=True)
         console.print("  [green]Build directory removed[/green]")
+    elif keep_build and not dry_run:
+        console.print(f"Build directory kept: {build_dir}")
 
     # Done
     console.print()
