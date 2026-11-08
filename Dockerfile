@@ -46,11 +46,20 @@ RUN ldconfig
 COPY --from=python-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-RUN useradd -r -s /bin/false libmbus2mqtt && \
-    mkdir -p /data/config /data/templates && \
-    chown -R libmbus2mqtt:libmbus2mqtt /data
-USER libmbus2mqtt
-RUN libmbus2mqtt config init --config /data/config/config.yaml
+# Runtime identity, pinned so existing volumes keep working across base images.
+# The entrypoint starts as root only to give /data to PUID:PGID (defaults below),
+# grant mapped serial device groups and drop privileges; with `user:` it runs the
+# app directly.
+ARG APP_UID=1000
+ARG APP_GID=1000
+RUN groupadd --gid "$APP_GID" libmbus2mqtt && \
+    useradd --uid "$APP_UID" --gid "$APP_GID" --groups dialout --no-create-home \
+        --home-dir /nonexistent --shell /usr/sbin/nologin libmbus2mqtt && \
+    install -d -o "$APP_UID" -g "$APP_GID" -m 0750 \
+        /data /data/config /data/log /data/templates
+COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ENV PUID=$APP_UID \
+    PGID=$APP_GID
 VOLUME ["/data"]
-ENTRYPOINT ["libmbus2mqtt"]
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["run", "--config", "/data/config/config.yaml", "--data-dir", "/data"]
