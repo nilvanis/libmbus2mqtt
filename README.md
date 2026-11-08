@@ -86,9 +86,14 @@ services:
       - /dev/ttyUSB0:/dev/ttyUSB0
     environment:
       TZ: Europe/London
+      # Owner of ./data on the host (check with: id -u / id -g)
+      PUID: 1000
+      PGID: 1000
 ```
 
 Save and exit (Ctrl+O, Ctrl+X).
+
+Set `PUID`/`PGID` to your own user (`id -u` and `id -g`, usually `1000`). The files in `./data` then belong to you, and you can edit the config without `sudo`. See [Permissions](#permissions) for details.
 
 ### Step 3: Create configuration
 
@@ -130,6 +135,39 @@ docker compose logs -f
 
 You should see your M-Bus devices being discovered and data published to MQTT.
 
+### Permissions
+
+The container starts as root only long enough to prepare `/data`, then runs libmbus2mqtt as `PUID:PGID` with no capabilities and `no_new_privs` set. On every start it:
+
+- creates `config/`, `log/` and `templates/` in `/data`;
+- changes the owner of anything in `/data` not owned by `PUID:PGID` (symlink targets are never followed);
+- removes access for other users, since the config holds your MQTT password;
+- grants the group of each mapped device (for example `dialout` for `/dev/ttyUSB0`), so the serial adapter works without extra settings.
+
+Run one-off CLI commands through the entrypoint too, so new files get the right owner:
+
+```bash
+docker compose run --rm libmbus2mqtt config init     # creates data/config/config.yaml
+```
+
+> [!NOTE]
+> **Upgrading from 2.1 or older:** earlier images ran as uid `999`. You don't need to do anything: on the first start the entrypoint hands the existing database and logs to `PUID:PGID`. If you set up `./data` with `chmod 777`/`666` as a workaround, those modes are tightened automatically.
+
+**Hardened mode.** If the container must never start as root (for example with `cap_drop: ALL` or a read-only root filesystem), set `user:` instead of `PUID`/`PGID`. The entrypoint then changes nothing, so prepare `./data` and device access yourself:
+
+```yaml
+    user: "1000:1000"
+    group_add: ["20"]        # group of the adapter: stat -c %g /dev/ttyUSB0
+    read_only: true
+    cap_drop: [ALL]
+```
+
+```bash
+sudo chown -R 1000:1000 data && chmod -R o-rwx data
+```
+
+With rootless Docker or Podman, set `PUID: 0`. In those runtimes the container's root is your own user.
+
 ---
 
 ## Native Installation
@@ -158,14 +196,18 @@ Or install libmbus manually - see [libmbus on GitHub](https://github.com/rscada/
 ### Step 2: Create configuration
 
 ```bash
-# Create config directory
+# Create the data directory and make it yours
 sudo mkdir -p /data/config
+sudo chown -R "$USER": /data
 
-# Generate example configuration
+# Generate example configuration (created with mode 0600: it will hold your MQTT password)
 libmbus2mqtt config init --config /data/config/config.yaml
 
 # Edit the configuration
-sudo nano /data/config/config.yaml
+nano /data/config/config.yaml
+
+# Serial adapters: allow your user to open the port (log out and back in afterwards)
+sudo usermod -aG dialout "$USER"
 ```
 
 ### Step 3: Test the connection
@@ -190,9 +232,13 @@ To run libmbus2mqtt automatically at startup:
 
 ```bash
 sudo libmbus2mqtt install
+
+# The service reads /etc/libmbus2mqtt/config.yaml as the libmbus2mqtt user
+sudo install -o libmbus2mqtt -m 0600 /data/config/config.yaml /etc/libmbus2mqtt/config.yaml
+sudo systemctl start libmbus2mqtt
 ```
 
-This creates a systemd service that starts on boot. To manage the service:
+This creates a systemd service that starts on boot. It keeps its database and logs in `/var/lib/libmbus2mqtt`. To manage the service:
 
 ```bash
 # Check status
@@ -319,6 +365,8 @@ services:
   libmbus2mqtt:
     image: nilvanis/libmbus2mqtt:latest
     environment:
+      PUID: 1000
+      PGID: 1000
       LIBMBUS2MQTT_MBUS_DEVICE: /dev/ttyUSB0
       LIBMBUS2MQTT_MQTT_HOST: 192.168.1.100
       LIBMBUS2MQTT_MQTT_USERNAME: user
@@ -391,7 +439,7 @@ libmbus2mqtt creates a "Bridge" device in Home Assistant with these entities:
 | Uptime | Sensor | How long the bridge has been running (disabled by default) |
 | Last Poll Duration | Sensor | Duration of last polling cycle in ms (disabled by default) |
 | Rescan Devices | Button | Trigger a new device scan |
-| Log Level | Select | Change logging level (DEBUG, INFO, WARNING, ERROR) |
+| Log Level | Select | Change logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 | Poll Interval | Number | Change polling interval (10-3600 seconds) |
 
 >[!IMPORTANT]
@@ -630,13 +678,24 @@ mbus:
 
 ### Permission Denied on Serial Device
 
-Add your user to the `dialout` group:
+libmbus2mqtt checks the device at startup. If it can't open the device, it stops with a message that shows its uid/gid and the device's owner and group.
+
+- **Docker (default mode):** the entrypoint grants the group of every mapped device, so make sure the adapter is listed under `devices:`.
+- **Docker with `user:`:** add the device's group: `group_add: ["<gid>"]`, where `<gid>` comes from `stat -c %g /dev/ttyUSB0`.
+- **Native:** add your user to the `dialout` group, then log out and back in:
 
 ```bash
 sudo usermod -aG dialout $USER
 ```
 
-Log out and back in for the change to take effect.
+### Permission Denied on /data (Docker)
+
+The message `Data directory /data (owner X:Y, mode ...) is not writable` means the container user can't write the mounted `./data`.
+
+- **Default mode:** set `PUID`/`PGID` and don't set `user:`. The entrypoint then fixes ownership on start.
+- **Hardened mode:** run `sudo chown -R <uid>:<gid> data` on the host.
+
+Don't use `chmod 777`: it exposes your MQTT password to every user on the host.
 
 ### No Devices Found
 
@@ -693,7 +752,6 @@ Log files are automatically rotated when they reach `max_size_mb` (default: 10 M
 
 > [!NOTE]
 > Log level changes via MQTT (`libmbus2mqtt/command/log_level`) are not persisted - they reset to the config value on restart. To permanently change the log level, edit `logs.level` in your config file.
-> Also, make sure the data/ directory is writable by libmbus2mqtt user if using Docker
 
 ---
 
