@@ -503,3 +503,49 @@ class TestMqttClientInternalCallbacks:
         client._on_disconnect(MagicMock(), None, None, 0, None)
 
         user_callback.assert_not_called()
+
+
+class TestMqttClientCallbackIsolation:
+    """User callbacks must never break the paho network thread."""
+
+    @pytest.fixture
+    def client(self) -> MqttClient:
+        client = MqttClient(MqttConfig(host="localhost", base_topic="test"))
+        client._client = MagicMock()
+        client._client.publish.return_value = MagicMock(rc=0)
+        return client
+
+    def test_connect_callback_error_is_logged_not_raised(
+        self, client: MqttClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client.on_connect(MagicMock(side_effect=RuntimeError("boom")))
+
+        client._on_connect(MagicMock(), None, None, MagicMock(value=0), None)
+
+        assert client.is_connected
+        assert client._connect_handled.is_set()
+        assert "Error in MQTT connect callback" in caplog.text
+
+    def test_disconnect_callback_error_is_logged_not_raised(
+        self, client: MqttClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client.on_disconnect(MagicMock(side_effect=RuntimeError("boom")))
+
+        client._on_disconnect(MagicMock(), None, None, MagicMock(), None)
+
+        assert "Error in MQTT disconnect callback" in caplog.text
+
+    @patch("libmbus2mqtt.mqtt.client.mqtt.Client")
+    def test_connect_returns_after_connect_callback_ran(self, mock_client_class: MagicMock) -> None:
+        client = MqttClient(MqttConfig(host="localhost"))
+        callback = MagicMock()
+        client.on_connect(callback)
+        paho = mock_client_class.return_value
+        paho.publish.return_value = MagicMock(rc=0)
+        paho.loop_start.side_effect = lambda: client._on_connect(
+            paho, None, None, MagicMock(value=0), None
+        )
+
+        client.connect()
+
+        callback.assert_called_once()

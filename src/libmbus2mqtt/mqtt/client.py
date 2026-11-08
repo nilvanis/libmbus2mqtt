@@ -38,6 +38,8 @@ class MqttClient:
         self.config = config
         self._client: mqtt.Client | None = None
         self._connected = threading.Event()
+        # Set once _on_connect, including the user callback, has finished.
+        self._connect_handled = threading.Event()
         self._stopping = False
         self._command_callbacks: dict[str, CommandCallback] = {}
         self._on_connect_callback: Callable[[], None] | None = None
@@ -86,6 +88,7 @@ class MqttClient:
         self._client.will_set(will_topic, "offline", qos=1, retain=True)
 
         # Connect
+        self._connect_handled.clear()
         self._client.connect(
             self.config.host,
             self.config.port,
@@ -95,8 +98,9 @@ class MqttClient:
         # Start network loop in background thread
         self._client.loop_start()
 
-        # Wait for connection
-        if not self._connected.wait(timeout=10):
+        # Wait until the connection is up and the connect callback has run, so the
+        # caller sees any work that callback queued.
+        if not self._connect_handled.wait(timeout=10):
             logger.error("Failed to connect to MQTT broker within timeout")
             raise ConnectionError("MQTT connection timeout")
 
@@ -135,9 +139,14 @@ class MqttClient:
             # Publish online status
             self.publish_bridge_state("online")
 
-            # Call user callback if set
+            # An exception escaping a paho callback stops the network thread and with
+            # it every future reconnect, so never let one through.
             if self._on_connect_callback:
-                self._on_connect_callback()
+                try:
+                    self._on_connect_callback()
+                except Exception:
+                    logger.exception("Error in MQTT connect callback")
+            self._connect_handled.set()
         else:
             logger.error(f"Failed to connect: {reason_code}")
 
@@ -154,7 +163,10 @@ class MqttClient:
         if not self._stopping:
             logger.warning(f"Disconnected from MQTT broker: {reason_code}")
             if self._on_disconnect_callback:
-                self._on_disconnect_callback()
+                try:
+                    self._on_disconnect_callback()
+                except Exception:
+                    logger.exception("Error in MQTT disconnect callback")
 
     def _on_message(
         self,

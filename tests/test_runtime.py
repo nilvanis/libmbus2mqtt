@@ -2,6 +2,9 @@
 
 import json
 import logging
+import signal
+import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -9,6 +12,7 @@ import pytest
 
 from libmbus2mqtt.config import AppConfig, DeviceConfig, HomeAssistantConfig, MbusConfig, MqttConfig
 from libmbus2mqtt.main import Daemon
+from libmbus2mqtt.models.device import Device
 from libmbus2mqtt.models.mbus import MbusData
 from libmbus2mqtt.mqtt.client import MqttClient
 
@@ -100,3 +104,102 @@ def test_log_level_command_publishes_state_without_waiting_for_poll(
     finally:
         root_logger.setLevel(original_levels[0])
         package_logger.setLevel(original_levels[1])
+
+
+def _startup_only_daemon(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **mbus_options: object
+) -> tuple[Daemon, MagicMock]:
+    """Daemon whose init steps are stubbed, so start() exercises only scan/delay/loop."""
+    config = AppConfig(
+        mbus=MbusConfig(device="/dev/simulated", **mbus_options),
+        mqtt=MqttConfig(host="localhost"),
+    )
+    daemon = Daemon(config, data_dir=tmp_path)
+    for step in ("_init_state_store", "_init_mbus", "_init_mqtt"):
+        monkeypatch.setattr(daemon, step, lambda: None)
+    monkeypatch.setattr("signal.signal", lambda *args: None)
+    run_loop = MagicMock()
+    monkeypatch.setattr(daemon, "_run_loop", run_loop)
+    return daemon, run_loop
+
+
+def test_shutdown_during_startup_scan_is_not_lost(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    daemon, run_loop = _startup_only_daemon(tmp_path, monkeypatch, autoscan=True, startup_delay=30)
+    monkeypatch.setattr(
+        daemon, "_scan_devices", lambda: daemon._signal_handler(signal.SIGTERM, None)
+    )
+
+    started = time.monotonic()
+    daemon.start()
+
+    assert time.monotonic() - started < 1, "startup delay must be skipped after SIGTERM"
+    run_loop.assert_not_called()
+
+
+def test_shutdown_interrupts_startup_delay(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    daemon, run_loop = _startup_only_daemon(tmp_path, monkeypatch, autoscan=False, startup_delay=30)
+    threading.Timer(0.1, daemon._signal_handler, args=(signal.SIGTERM, None)).start()
+
+    started = time.monotonic()
+    daemon.start()
+
+    assert time.monotonic() - started < 2
+    run_loop.assert_not_called()
+
+
+def test_shutdown_stops_polling_remaining_devices(minimal_app_config: AppConfig) -> None:
+    daemon = Daemon(minimal_app_config)
+    daemon._mbus = MagicMock()
+    daemon._mqtt = MagicMock()
+    for address in (1, 2, 3):
+        daemon._devices[address] = Device(address=address)
+
+    def poll(address: int, timeout: int) -> None:
+        daemon._signal_handler(signal.SIGTERM, None)
+
+    daemon._mbus.poll.side_effect = poll
+    daemon._poll_devices()
+
+    daemon._mbus.poll.assert_called_once()
+
+
+def test_mqtt_connect_callback_only_queues_republish(
+    minimal_app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    daemon = Daemon(minimal_app_config)
+    republish = MagicMock()
+    monkeypatch.setattr(daemon, "_republish_after_connect", republish)
+
+    daemon._on_mqtt_connect()  # MQTT network thread
+    republish.assert_not_called()
+
+    daemon._process_republish_request()  # main thread
+    daemon._process_republish_request()
+    republish.assert_called_once()
+
+
+def test_run_loop_serves_rescan_without_waiting_for_poll_interval(
+    minimal_app_config: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    minimal_app_config.mbus.poll_interval = 3600
+    daemon = Daemon(minimal_app_config)
+    events: list[str] = []
+
+    def poll() -> None:
+        events.append("poll")
+        if events.count("poll") == 1:
+            threading.Timer(0.05, daemon._request_rescan).start()
+        else:
+            daemon._stop_requested = True
+
+    monkeypatch.setattr(daemon, "_poll_devices", poll)
+    monkeypatch.setattr(daemon, "_scan_devices", lambda: events.append("scan"))
+    monkeypatch.setattr(daemon, "_update_bridge_info", lambda loop_start: None)
+
+    started = time.monotonic()
+    daemon._run_loop()
+
+    assert events == ["poll", "scan", "poll"]
+    assert time.monotonic() - started < 2

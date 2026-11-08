@@ -269,6 +269,7 @@ class TestDaemonIdentitySync:
         daemon._ha_discovery.reset_mock()
 
         daemon._on_mqtt_connect()
+        daemon._process_republish_request()
 
         daemon._ha_discovery.publish_device_discovery.assert_called_once_with(device_two)
         daemon._mqtt.publish_device_availability.assert_called_once_with("A1", "online")
@@ -324,6 +325,7 @@ class TestDaemonIdentitySync:
         daemon._bridge_info = MagicMock()
 
         daemon._on_mqtt_connect()
+        daemon._process_republish_request()
 
         daemon._mqtt.publish.assert_any_call(
             "libmbus2mqtt/device/A1/state",
@@ -349,6 +351,7 @@ class TestDaemonIdentitySync:
         daemon._mqtt.base_topic = "libmbus2mqtt"
 
         daemon._on_mqtt_connect()
+        daemon._process_republish_request()
 
         assert device.mbus_data is not None
         daemon._mqtt.publish_device_state.assert_called_once_with(

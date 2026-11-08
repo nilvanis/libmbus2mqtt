@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -27,6 +28,61 @@ logger = get_logger("mbus.interface")
 # Regex pattern to extract device IDs from scan output
 SCAN_PATTERN = re.compile(r"Found a M-Bus device at address (\d+)")
 
+# How often a running libmbus command checks for a shutdown request.
+_CANCEL_CHECK_INTERVAL = 0.2
+
+StopCheck = Callable[[], bool]
+
+
+class CommandCancelledError(Exception):
+    """A libmbus command was aborted because shutdown was requested."""
+
+
+def run_command(
+    cmd: list[str],
+    *,
+    timeout: float,
+    should_stop: StopCheck | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """
+    Run a libmbus CLI tool, killing it on timeout or when shutdown is requested.
+
+    Raises:
+        subprocess.TimeoutExpired: the command did not finish within ``timeout``.
+        CommandCancelledError: ``should_stop`` returned True while the command was running.
+    """
+    if should_stop is not None and should_stop():
+        raise CommandCancelledError(cmd[0])
+
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining = deadline - time.monotonic()
+        try:
+            stdout, stderr = process.communicate(
+                timeout=max(0.0, min(_CANCEL_CHECK_INTERVAL, remaining))
+            )
+        except subprocess.TimeoutExpired:
+            if should_stop is not None and should_stop():
+                _kill(process)
+                raise CommandCancelledError(cmd[0]) from None
+            if time.monotonic() >= deadline:
+                _kill(process)
+                raise subprocess.TimeoutExpired(cmd, timeout) from None
+            continue
+        return subprocess.CompletedProcess(cmd, process.returncode, stdout, stderr)
+
+
+def _kill(process: subprocess.Popen[str]) -> None:
+    """Kill a child process and reap it so the serial port is released."""
+    process.kill()
+    process.communicate()
+
 
 class MbusInterface:
     """Interface to M-Bus devices via libmbus CLI tools."""
@@ -38,6 +94,7 @@ class MbusInterface:
         libmbus_path: Path | str = LIBMBUS_DEFAULT_INSTALL_PATH,
         retry_count: int = MBUS_DEFAULT_RETRY_COUNT,
         retry_delay: int = MBUS_DEFAULT_RETRY_DELAY,
+        should_stop: StopCheck | None = None,
     ) -> None:
         self.endpoint: MbusEndpoint = parse_mbus_device(device)
         self.device = device
@@ -45,7 +102,21 @@ class MbusInterface:
         self.libmbus_path = Path(libmbus_path)
         self.retry_count = retry_count
         self.retry_delay = retry_delay
+        self.should_stop = should_stop
         self._validate_libmbus()
+
+    def _stop_requested(self) -> bool:
+        return self.should_stop is not None and self.should_stop()
+
+    def _wait_before_retry(self) -> bool:
+        """Sleep for the retry delay; return True if shutdown was requested meanwhile."""
+        deadline = time.monotonic() + self.retry_delay
+        while not self._stop_requested():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            time.sleep(min(_CANCEL_CHECK_INTERVAL, remaining))
+        return True
 
     def _validate_libmbus(self) -> None:
         """Check if required libmbus binaries are available for the endpoint type."""
@@ -98,12 +169,7 @@ class MbusInterface:
 
         for attempt in range(self.retry_count + 1):
             try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                )
+                result = run_command(cmd, timeout=timeout, should_stop=self.should_stop)
 
                 if result.returncode != 0:
                     last_error = RuntimeError(result.stderr or "scan failed")
@@ -125,6 +191,9 @@ class MbusInterface:
                     logger.info(f"Scan complete: {len(devices)} device(s) found")
                     return devices
 
+            except CommandCancelledError:
+                logger.info("Scan cancelled: shutdown requested")
+                return []
             except subprocess.TimeoutExpired as e:
                 last_error = e
                 logger.warning(
@@ -143,8 +212,9 @@ class MbusInterface:
                     attempt + 1,
                     self.retry_count,
                 )
-                if self.retry_delay > 0:
-                    time.sleep(self.retry_delay)
+                if self._wait_before_retry():
+                    logger.info("Scan cancelled: shutdown requested")
+                    return []
 
         logger.error("Scan failed after %s attempt(s): %s", self.retry_count + 1, last_error)
         return []
@@ -180,12 +250,7 @@ class MbusInterface:
 
         for attempt in range(self.retry_count + 1):
             try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout,
-                )
+                result = run_command(cmd, timeout=timeout, should_stop=self.should_stop)
 
                 if result.returncode != 0:
                     last_error = RuntimeError(result.stderr or "poll failed")
@@ -199,6 +264,9 @@ class MbusInterface:
                 else:
                     return result.stdout
 
+            except CommandCancelledError:
+                logger.debug("Poll of device %s cancelled: shutdown requested", device_id)
+                return None
             except subprocess.TimeoutExpired as e:
                 last_error = e
                 logger.warning(
@@ -219,8 +287,8 @@ class MbusInterface:
                     attempt + 1,
                     self.retry_count,
                 )
-                if self.retry_delay > 0:
-                    time.sleep(self.retry_delay)
+                if self._wait_before_retry():
+                    return None
 
         logger.warning(
             "Polling device %s failed after %s attempt(s): %s",
