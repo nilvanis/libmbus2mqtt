@@ -86,14 +86,14 @@ services:
       - /dev/ttyUSB0:/dev/ttyUSB0
     environment:
       TZ: Europe/London
-      # Owner of ./data on the host (check with: id -u / id -g)
+      # Owner of ./data on the host
       PUID: 1000
       PGID: 1000
 ```
 
 Save and exit (Ctrl+O, Ctrl+X).
 
-Set `PUID`/`PGID` to your own user (`id -u` and `id -g`, usually `1000`). The files in `./data` then belong to you, and you can edit the config without `sudo`. See [Permissions](#permissions) for details.
+Set `PUID`/`PGID` to your own user (run `id -u` and `id -g` on the host). The files in `./data` then belong to you, and you can edit the config without `sudo`.
 
 ### Step 3: Create configuration
 
@@ -137,21 +137,7 @@ You should see your M-Bus devices being discovered and data published to MQTT.
 
 ### Permissions
 
-The container starts as root only long enough to prepare `/data`, then runs libmbus2mqtt as `PUID:PGID` with no capabilities and `no_new_privs` set. On every start it:
-
-- creates `config/`, `log/` and `templates/` in `/data`;
-- changes the owner of anything in `/data` not owned by `PUID:PGID` (symlink targets are never followed);
-- removes access for other users, since the config holds your MQTT password;
-- grants the group of each mapped device (for example `dialout` for `/dev/ttyUSB0`), so the serial adapter works without extra settings.
-
-Run one-off CLI commands through the entrypoint too, so new files get the right owner:
-
-```bash
-docker compose run --rm libmbus2mqtt config init     # creates data/config/config.yaml
-```
-
-> [!NOTE]
-> **Upgrading from 2.1 or older:** earlier images ran as uid `999`. You don't need to do anything: on the first start the entrypoint hands the existing database and logs to `PUID:PGID`. If you set up `./data` with `chmod 777`/`666` as a workaround, those modes are tightened automatically.
+The container starts as root only long enough to prepare `/data`, then runs libmbus2mqtt as `PUID:PGID` with no capabilities and `no_new_privs` set.
 
 **Hardened mode.** If the container must never start as root (for example with `cap_drop: ALL` or a read-only root filesystem), set `user:` instead of `PUID`/`PGID`. The entrypoint then changes nothing, so prepare `./data` and device access yourself:
 
@@ -172,85 +158,85 @@ With rootless Docker or Podman, set `PUID: 0`. In those runtimes the container's
 
 ## Native Installation
 
-For running directly on Linux without Docker.
+For running directly on Linux without Docker, as a systemd service. Requires Python 3.11+.
 
-### Step 1: Install libmbus
+| Path | Contents |
+| --- | --- |
+| `/opt/libmbus2mqtt` | Program (Python virtual environment) |
+| `/etc/libmbus2mqtt/config.yaml` | Configuration |
+| `/var/lib/libmbus2mqtt` | Database, logs, user templates |
 
-libmbus2mqtt can install libmbus for you:
+### Step 1: Install libmbus2mqtt and libmbus
 
 ```bash
-# Install dependencies first (Debian/Ubuntu)
-sudo apt-get install ca-certificates git build-essential libtool libltdl-dev autoconf automake
+# Build dependencies (Debian/Ubuntu/Raspberry Pi OS)
+sudo apt-get install python3-venv ca-certificates git build-essential libtool libltdl-dev autoconf automake
 
-# Clone and install libmbus2mqtt
-git clone https://github.com/nilvanis/libmbus2mqtt
-cd libmbus2mqtt
-pip install .
+# Install libmbus2mqtt into its own virtual environment
+sudo python3 -m venv /opt/libmbus2mqtt
+sudo /opt/libmbus2mqtt/bin/pip install git+https://github.com/nilvanis/libmbus2mqtt
+sudo ln -s /opt/libmbus2mqtt/bin/libmbus2mqtt /usr/local/bin/libmbus2mqtt
 
-# Install libmbus
+# Build and install libmbus
 sudo libmbus2mqtt libmbus install
 ```
 
 Or install libmbus manually - see [libmbus on GitHub](https://github.com/rscada/libmbus).
 
-### Step 2: Create configuration
-
-```bash
-# Create the data directory and make it yours
-sudo mkdir -p /data/config
-sudo chown -R "$USER": /data
-
-# Generate example configuration (created with mode 0600: it will hold your MQTT password)
-libmbus2mqtt config init --config /data/config/config.yaml
-
-# Edit the configuration
-nano /data/config/config.yaml
-
-# Serial adapters: allow your user to open the port (log out and back in afterwards)
-sudo usermod -aG dialout "$USER"
-```
-
-### Step 3: Test the connection
-
-```bash
-# Check if your M-Bus device is accessible
-libmbus2mqtt device-info
-
-# Scan for connected meters
-libmbus2mqtt scan
-```
-
-### Step 4: Run the daemon
-
-```bash
-libmbus2mqtt run
-```
-
-### Step 5: Install as a service (optional)
-
-To run libmbus2mqtt automatically at startup:
+### Step 2: Install the service
 
 ```bash
 sudo libmbus2mqtt install
-
-# The service reads /etc/libmbus2mqtt/config.yaml as the libmbus2mqtt user
-sudo install -o libmbus2mqtt -m 0600 /data/config/config.yaml /etc/libmbus2mqtt/config.yaml
-sudo systemctl start libmbus2mqtt
 ```
 
-This creates a systemd service that starts on boot. It keeps its database and logs in `/var/lib/libmbus2mqtt`. To manage the service:
+This creates:
+
+- the `libmbus2mqtt` user, a member of `dialout` so it can open serial adapters;
+- `/etc/libmbus2mqtt/config.yaml` from the example, readable only by that user (an existing file is kept);
+- `/var/lib/libmbus2mqtt`;
+- the systemd service, enabled at boot but not started yet.
+
+### Step 3: Edit the configuration
+
+```bash
+sudo nano /etc/libmbus2mqtt/config.yaml
+```
+
+Set at least `mbus.device` and `mqtt.host`; see [Configuration](#configuration).
+
+### Step 4: Test the connection (optional)
+
+Run the checks as the service user, so they use the same permissions as the service:
+
+```bash
+# Check if your M-Bus device is accessible
+sudo -u libmbus2mqtt libmbus2mqtt device-info
+
+# Scan for connected meters
+sudo -u libmbus2mqtt libmbus2mqtt scan
+```
+
+### Step 5: Start the service
+
+```bash
+sudo systemctl start libmbus2mqtt
+sudo journalctl -u libmbus2mqtt -f
+```
+
+To manage the service:
 
 ```bash
 # Check status
 sudo systemctl status libmbus2mqtt
 
-# View logs
-sudo journalctl -u libmbus2mqtt -f
-
 # Stop the service
 sudo systemctl stop libmbus2mqtt
 
-# Remove the service
+# Update libmbus2mqtt
+sudo /opt/libmbus2mqtt/bin/pip install --upgrade git+https://github.com/nilvanis/libmbus2mqtt
+sudo systemctl restart libmbus2mqtt
+
+# Remove the service (--purge also deletes the config, data and user)
 sudo libmbus2mqtt uninstall
 ```
 
@@ -258,7 +244,10 @@ sudo libmbus2mqtt uninstall
 
 ## Configuration
 
-Configuration is stored in a YAML file. By default, libmbus2mqtt looks for `/data/config/config.yaml`.
+Configuration is stored in a YAML file:
+
+- **Docker:** `data/config/config.yaml` on the host
+- **native:** `/etc/libmbus2mqtt/config.yaml`.
 
 ### Minimal Configuration
 
@@ -415,6 +404,8 @@ libmbus2mqtt libmbus install
 
 ### Using a Custom Config File
 
+Commands use `/etc/libmbus2mqtt/config.yaml` natively and `/data/config/config.yaml` in Docker. To use another file:
+
 ```bash
 libmbus2mqtt run --config /path/to/config.yaml
 libmbus2mqtt scan --config /path/to/config.yaml
@@ -483,10 +474,10 @@ libmbus2mqtt includes templates for common devices. Check the [Supported Devices
 
 ### Custom Templates
 
-You can create custom templates for your devices. Place them in `/data/templates/`:
+You can create custom templates for your devices. Place them in the `templates/` folder of the data directory: `data/templates/` on the host with Docker, `/var/lib/libmbus2mqtt/templates/` natively.
 
 ```text
-/data/
+<data directory>/
 └── templates/
     ├── index.json              # Maps devices to templates
     └── my_custom_meter.json    # Your template file
@@ -544,7 +535,7 @@ Common use case is creating dedicated sensors from data in Manufacturer Specific
 
 Template lookup order:
 - If `template` is set for a deive in `config.yaml`,libmbus2mqtt uses that exact template file and skips auto-matching.
-- Otherwise, libmbus2mqtt checks `/data/templates/index.json` first for user defined index/template.
+- Otherwise, libmbus2mqtt checks `templates/index.json` in the data directory first for user defined index/template.
 - If no match or no user-defined index at all, built-in templates are checked.
 - Within template index, matches are tried in this order:
   1. `Manufacturer` + `ProductName` + `DataRecordCount`
@@ -554,7 +545,7 @@ Template lookup order:
 > - `DataRecordCount` is the number of `<DataRecord>` items in the libmbus XML return data.
 > - Only numbered template entries (`"0"`, `"1"`, ...) count toward `DataRecordCount`, `custom-*` **do not count**.
 
-This lets you add templates without blocking built-in ones; if you want to override a built-in, add a matching entry to your user index and provide the file in `/data/templates/`.
+This lets you add templates without blocking built-in ones; if you want to override a built-in, add a matching entry to your user index and provide the file in the same `templates/` folder.
 
 If the same device later advertises a different `DataRecordCount`, libmbus2mqtt rematches the template for that device instead of creating a new Home Assistant device.
 
@@ -678,11 +669,9 @@ mbus:
 
 ### Permission Denied on Serial Device
 
-libmbus2mqtt checks the device at startup. If it can't open the device, it stops with a message that shows its uid/gid and the device's owner and group.
-
-- **Docker (default mode):** the entrypoint grants the group of every mapped device, so make sure the adapter is listed under `devices:`.
+- **Docker (default mode):** make sure the adapter is correctly listed under `devices:`.
 - **Docker with `user:`:** add the device's group: `group_add: ["<gid>"]`, where `<gid>` comes from `stat -c %g /dev/ttyUSB0`.
-- **Native:** add your user to the `dialout` group, then log out and back in:
+- **Native:** the service user `libmbus2mqtt` is already in `dialout`. Check that the adapter's group is `dialout`, with `stat -c %G /dev/ttyUSB0`. To run commands as your own user instead of `sudo -u libmbus2mqtt`, add yourself to that group, then log out and back in:
 
 ```bash
 sudo usermod -aG dialout $USER
@@ -690,12 +679,8 @@ sudo usermod -aG dialout $USER
 
 ### Permission Denied on /data (Docker)
 
-The message `Data directory /data (owner X:Y, mode ...) is not writable` means the container user can't write the mounted `./data`.
-
-- **Default mode:** set `PUID`/`PGID` and don't set `user:`. The entrypoint then fixes ownership on start.
-- **Hardened mode:** run `sudo chown -R <uid>:<gid> data` on the host.
-
-Don't use `chmod 777`: it exposes your MQTT password to every user on the host.
+- **Default mode:** set `PUID`/`PGID` in `docker-compose.yaml` and don't set `user:`. The entrypoint then fixes ownership on start.
+- **Hardened mode:** run `sudo chown -R <uid>:<gid> data` on the host, where `data` is the data directory for libmbus2mqtt.
 
 ### No Devices Found
 
