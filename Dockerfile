@@ -20,7 +20,7 @@ RUN . ./libmbus.env && \
 
 # Stage 2: Install the project and runtime dependencies from uv.lock.
 FROM python:3.14-slim-trixie AS python-builder
-COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
 
 WORKDIR /app
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \

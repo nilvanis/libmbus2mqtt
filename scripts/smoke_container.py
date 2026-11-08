@@ -162,7 +162,7 @@ def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit("Usage: smoke_container.py <BUILT_IMAGE>")
     image = sys.argv[1]
-    broker_image = "eclipse-mosquitto:2.0.22"
+    broker_image = "eclipse-mosquitto:2.1.2-alpine"
     fixture = Path(__file__).resolve().parent.parent / "tests/fixtures/apator_apt-mbus-na-1.xml"
     xml = ET.fromstring(fixture.read_text())
     meter_id = xml.findtext("SlaveInformation/Id")
