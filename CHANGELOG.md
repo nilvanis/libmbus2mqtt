@@ -2,9 +2,10 @@
 
 ## 2.1.1 (unreleased)
 
-- Added `data_dir` / `LIBMBUS2MQTT_DATA_DIR` for runtime storage, user templates,
-  and the default log file. Docker keeps `/data`; the systemd service uses
+- Added `--data-dir` for runtime storage, user templates, and the default log
+  file. Docker keeps `/data`; the systemd service passes
   `/var/lib/libmbus2mqtt`.
+- File logging is enabled by default, with size-based rotation and five backups.
 - Bundled the systemd unit in Python wheels and aligned its writable paths with
   the daemon's storage configuration.
 - Redacted secrets in environment override logs and hid input values in

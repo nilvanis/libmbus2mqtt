@@ -54,7 +54,6 @@ class PlainFormatter(logging.Formatter):
 def _setup_file_handler(
     logger: logging.Logger,
     config: LogsConfig,
-    level: int,
     default_log_file: Path = LOG_DEFAULT_FILE,
 ) -> None:
     """
@@ -63,7 +62,6 @@ def _setup_file_handler(
     Args:
         logger: The logger to add the handler to.
         config: LogsConfig with file logging settings.
-        level: Log level to use for the file handler.
     """
     log_path = config.file if config.file is not None else default_log_file
 
@@ -88,7 +86,7 @@ def _setup_file_handler(
         return
 
     file_handler.setFormatter(PlainFormatter())
-    file_handler.setLevel(level)
+    # Inherit the active logger level, including changes made through MQTT.
     logger.addHandler(file_handler)
 
 
@@ -125,7 +123,7 @@ def setup_logging(
 
     # Add file handler if configured
     if logs_config and logs_config.save_to_file:
-        _setup_file_handler(root_logger, logs_config, numeric_level, default_log_file)
+        _setup_file_handler(root_logger, logs_config, default_log_file)
 
     # Set level for our package
     logging.getLogger("libmbus2mqtt").setLevel(numeric_level)

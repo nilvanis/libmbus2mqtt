@@ -44,10 +44,12 @@ def main() -> None:
         work = Path(directory)
         work.chmod(0o755)
         data = work / "data"
-        runtime = data / "runtime"
-        templates = runtime / "templates"
+        templates = data / "templates"
         templates.mkdir(parents=True)
-        runtime.chmod(0o777)
+        data.chmod(0o777)
+        # Keep test-created files removable by the host after the container exits.
+        (data / "log").mkdir(mode=0o777)
+        (data / "log").chmod(0o777)
         shutil.copyfile(fixture, work / "payload.xml")
         adapter = work / "mbus-serial-request-data"
         adapter.write_text("#!/bin/sh\ncat /smoke/payload.xml\n")
@@ -73,7 +75,6 @@ def main() -> None:
             )
         )
         (work / "config.yaml").write_text("""\
-data_dir: /must-be-overridden
 mbus:
   device: /dev/simulated-mbus
   autoscan: false
@@ -99,6 +100,7 @@ devices:
                 """
 import os, subprocess
 assert os.geteuid() != 0, 'Container must run as a non-root user'
+assert 'LIBMBUS2MQTT_DATA_DIR' not in os.environ
 for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'mbus-tcp-request-data']:
     result = subprocess.run([name], capture_output=True, timeout=5)
     assert result.returncode in (0, 1), (name, result.stderr)
@@ -143,7 +145,7 @@ for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'm
                 "--env",
                 "PYTHONDONTWRITEBYTECODE=1",
                 "--env",
-                "LIBMBUS2MQTT_DATA_DIR=/data/runtime",
+                "LIBMBUS2MQTT_CONFIG=/smoke/config.yaml",
                 "--mount",
                 f"type=bind,source={work},target=/smoke,readonly",
                 "--mount",
@@ -151,9 +153,6 @@ for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'm
                 "--mount",
                 f"type=bind,source={adapter},target=/usr/local/bin/mbus-serial-request-data,readonly",
                 image,
-                "run",
-                "--config",
-                "/smoke/config.yaml",
             )
 
             def retained(topic: str) -> str:
@@ -182,7 +181,7 @@ for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'm
                         raise AssertionError(f"Log level {level} was not confirmed immediately")
                     time.sleep(0.1)
             with closing(
-                sqlite3.connect(f"file:{runtime / 'libmbus2mqtt.db'}?mode=ro", uri=True)
+                sqlite3.connect(f"file:{data / 'libmbus2mqtt.db'}?mode=ro", uri=True)
             ) as conn:
                 assert conn.execute("SELECT COUNT(*) FROM device_snapshot").fetchone()[0] == 1
             docker("stop", "--time", "10", daemon)
@@ -190,9 +189,10 @@ for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'm
                 docker("inspect", "--format", "{{.State.ExitCode}}", daemon).stdout.strip() == "0"
             )
             assert retained("libmbus2mqtt/bridge/state") == "offline"
-            print(
-                "Container startup, user templates, SQLite, MQTT state/discovery, and shutdown: OK"
-            )
+            log_file = data / "log/libmbus2mqtt.log"
+            assert log_file.is_file(), "Default file logging must create /data/log/libmbus2mqtt.log"
+            assert "Setting log level to DEBUG" in log_file.read_text()
+            print("Container startup, /data storage, file logs, templates, MQTT, and shutdown: OK")
         except Exception:
             print(docker("logs", daemon, check=False).stdout, file=sys.stderr)
             print(docker("logs", broker, check=False).stderr, file=sys.stderr)

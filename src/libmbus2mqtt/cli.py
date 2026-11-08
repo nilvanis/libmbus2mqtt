@@ -9,7 +9,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from libmbus2mqtt.constants import APP_NAME, APP_VERSION, DEFAULT_CONFIG_FILE
+from libmbus2mqtt.constants import APP_NAME, APP_VERSION, DEFAULT_CONFIG_FILE, DEFAULT_DATA_DIR
 from libmbus2mqtt.mbus.utils import check_tcp_connectivity, parse_mbus_device
 
 app = typer.Typer(
@@ -46,6 +46,11 @@ LogLevelOption = Annotated[
     ),
 ]
 
+DataDirOption = Annotated[
+    Path,
+    typer.Option("--data-dir", help="Directory for the database, user templates and log files"),
+]
+
 
 def version_callback(value: bool) -> None:
     """Print version and exit."""
@@ -75,6 +80,7 @@ def main(
 def run(
     config: ConfigOption = None,
     log_level: LogLevelOption = None,
+    data_dir: DataDirOption = DEFAULT_DATA_DIR,
 ) -> None:
     """Start the libmbus2mqtt daemon."""
     from libmbus2mqtt.config import AppConfig
@@ -97,19 +103,22 @@ def run(
     # CLI --log-level overrides config if provided
     effective_level = log_level if log_level else app_config.logs.level
     setup_logging(
-        level=effective_level, logs_config=app_config.logs, default_log_file=app_config.log_file
+        level=effective_level,
+        logs_config=app_config.logs,
+        default_log_file=data_dir / "log" / f"{APP_NAME}.log",
     )
 
     # Import and run main loop
     from libmbus2mqtt.main import run_daemon
 
-    run_daemon(app_config)
+    run_daemon(app_config, data_dir=data_dir)
 
 
 @app.command()
 def scan(
     config: ConfigOption = None,
     log_level: LogLevelOption = None,
+    data_dir: DataDirOption = DEFAULT_DATA_DIR,
 ) -> None:
     """Scan for M-Bus devices (one-shot)."""
     from libmbus2mqtt.config import AppConfig
@@ -130,7 +139,9 @@ def scan(
     # CLI --log-level overrides config if provided
     effective_level = log_level if log_level else app_config.logs.level
     setup_logging(
-        level=effective_level, logs_config=app_config.logs, default_log_file=app_config.log_file
+        level=effective_level,
+        logs_config=app_config.logs,
+        default_log_file=data_dir / "log" / f"{APP_NAME}.log",
     )
 
     # Import and run scan

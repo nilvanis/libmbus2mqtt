@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from libmbus2mqtt.constants import APP_VERSION, TOPIC_DEVICE_STATE
+from libmbus2mqtt.constants import APP_VERSION, DEFAULT_DATA_DIR, TOPIC_DEVICE_STATE
 from libmbus2mqtt.logging import get_logger
 from libmbus2mqtt.mbus.interface import MbusInterface
 from libmbus2mqtt.models.device import AvailabilityStatus, Device
@@ -20,6 +20,8 @@ from libmbus2mqtt.mqtt import (
 from libmbus2mqtt.state import StateStore, build_identity_key, utcnow_iso
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from libmbus2mqtt.config import AppConfig
     from libmbus2mqtt.state import DeviceSnapshotRecord
 
@@ -39,8 +41,9 @@ class DeviceSyncResult:
 class Daemon:
     """Main daemon class managing the polling loop."""
 
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, config: AppConfig, *, data_dir: Path = DEFAULT_DATA_DIR) -> None:
         self.config = config
+        self._data_dir = data_dir
         self._running = False
         self._rescan_requested = False
         self._poll_interval = config.mbus.poll_interval
@@ -134,7 +137,7 @@ class Daemon:
 
     def _init_state_store(self) -> None:
         """Initialize persistent runtime state."""
-        self._state_store = StateStore(self.config.db_path)
+        self._state_store = StateStore(self._data_dir / "libmbus2mqtt.db")
 
     def _init_mqtt(self) -> None:
         """Initialize MQTT client and related components."""
@@ -159,7 +162,7 @@ class Daemon:
                 self._mqtt,
                 self.config.homeassistant,
                 self._state_store,
-                templates_dir=self.config.templates_dir,
+                templates_dir=self._data_dir / "templates",
             )
 
         self._mqtt.on_connect(self._on_mqtt_connect)
@@ -664,7 +667,7 @@ class Daemon:
         logger.info("Shutdown complete")
 
 
-def run_daemon(config: AppConfig) -> None:
+def run_daemon(config: AppConfig, *, data_dir: Path = DEFAULT_DATA_DIR) -> None:
     """Run the main daemon loop."""
-    daemon = Daemon(config)
+    daemon = Daemon(config, data_dir=data_dir)
     daemon.start()

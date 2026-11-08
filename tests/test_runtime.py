@@ -16,18 +16,19 @@ from libmbus2mqtt.mqtt.client import MqttClient
 def test_startup_polls_with_configured_storage_and_templates(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, apator_mbus_data: MbusData
 ) -> None:
+    data_dir = tmp_path / "runtime"
+    templates_dir = data_dir / "templates"
     config = AppConfig(
-        data_dir=tmp_path / "runtime",
         mbus=MbusConfig(device="/dev/simulated", autoscan=False, startup_delay=0),
         mqtt=MqttConfig(host="localhost"),
         homeassistant=HomeAssistantConfig(enabled=True),
         devices=[DeviceConfig(id=1)],
     )
-    config.templates_dir.mkdir(parents=True)
-    (config.templates_dir / "index.json").write_text(
+    templates_dir.mkdir(parents=True)
+    (templates_dir / "index.json").write_text(
         json.dumps({"custom.json": {"Manufacturer": "APA", "DataRecordCount": 12}})
     )
-    (config.templates_dir / "custom.json").write_text(
+    (templates_dir / "custom.json").write_text(
         json.dumps(
             {
                 str(i): {
@@ -43,7 +44,7 @@ def test_startup_polls_with_configured_storage_and_templates(
     mbus.poll.return_value = apator_mbus_data
     mqtt = MagicMock()
     mqtt.base_topic = "libmbus2mqtt"
-    daemon = Daemon(config)
+    daemon = Daemon(config, data_dir=data_dir)
     mqtt.connect.side_effect = daemon._on_mqtt_connect
     monkeypatch.setattr("libmbus2mqtt.main.MbusInterface", lambda **kwargs: mbus)
     monkeypatch.setattr("libmbus2mqtt.main.MqttClient", lambda config: mqtt)
@@ -52,7 +53,7 @@ def test_startup_polls_with_configured_storage_and_templates(
 
     daemon.start()
 
-    assert config.db_path.is_file()
+    assert (data_dir / "libmbus2mqtt.db").is_file()
     mqtt.connect.assert_called_once()
     mqtt.disconnect.assert_called_once()
     mqtt.publish_device_state.assert_called_once()

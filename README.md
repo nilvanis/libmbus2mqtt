@@ -274,7 +274,7 @@ availability:
 # Logging
 logs:
   level: INFO                   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  save_to_file: false           # Enable file logging
+  save_to_file: true            # Enable file logging
   file: data/log/libmbus2mqtt.log  # Log file path
   max_size_mb: 10               # Max file size before rotation (1-1000 MB)
   backup_count: 5               # Number of rotated backup files (0-100)
@@ -681,12 +681,12 @@ You can also set the log level permanently using either:
 
 ### Persistent Log Files
 
-Enable file logging in your configuration:
+File logging is enabled by default:
 
 ```yaml
 logs:
   save_to_file: true
-  file: data/log/libmbus2mqtt.log  # Log files will be here
+  file:                        # Default: <data-dir>/log/libmbus2mqtt.log
 ```
 
 Log files are automatically rotated when they reach `max_size_mb` (default: 10 MB). Old files are kept up to `backup_count` (default: 5).

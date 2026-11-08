@@ -16,7 +16,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from libmbus2mqtt.constants import (
     AVAILABILITY_DEFAULT_TIMEOUT_POLLS,
     DEFAULT_CONFIG_FILE,
-    DEFAULT_DATA_DIR,
     ENV_PREFIX,
     HA_DEFAULT_DISCOVERY_PREFIX,
     LOG_DEFAULT_BACKUP_COUNT,
@@ -41,7 +40,6 @@ from libmbus2mqtt.mbus.utils import parse_mbus_device
 EnvPath = tuple[str, ...]
 
 ENV_VAR_PATHS: dict[str, EnvPath] = {
-    f"{ENV_PREFIX}_DATA_DIR": ("data_dir",),
     # M-Bus
     f"{ENV_PREFIX}_MBUS_DEVICE": ("mbus", "device"),
     f"{ENV_PREFIX}_MBUS_BAUDRATE": ("mbus", "baudrate"),
@@ -222,12 +220,12 @@ class LogsConfig(BaseModel):
         description="Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
     )
     save_to_file: bool = Field(
-        default=False,
+        default=True,
         description="Enable file logging",
     )
     file: Path | None = Field(
         default=None,
-        description="Log file path (defaults to <data_dir>/log/libmbus2mqtt.log)",
+        description="Log file path (defaults to <data-dir>/log/libmbus2mqtt.log)",
     )
     max_size_mb: int = Field(
         default=LOG_DEFAULT_MAX_SIZE_MB,
@@ -261,30 +259,12 @@ class AppConfig(BaseSettings):
         hide_input_in_errors=True,
     )
 
-    data_dir: Path = Field(default=DEFAULT_DATA_DIR, description="Runtime data directory")
     mbus: MbusConfig
     mqtt: MqttConfig
     homeassistant: HomeAssistantConfig = Field(default_factory=HomeAssistantConfig)
     devices: list[DeviceConfig] = Field(default_factory=list)
     availability: AvailabilityConfig = Field(default_factory=AvailabilityConfig)
     logs: LogsConfig = Field(default_factory=LogsConfig)
-
-    @property
-    def db_path(self) -> Path:
-        """SQLite state location for this runtime."""
-        return self.data_dir / "libmbus2mqtt.db"
-
-    @property
-    def templates_dir(self) -> Path:
-        """User template directory for this runtime."""
-        return self.data_dir / "templates"
-
-    @property
-    def log_file(self) -> Path:
-        """Keep explicit log paths; derive the default without freezing it into saved YAML."""
-        return (
-            self.logs.file if self.logs.file is not None else self.data_dir / "log/libmbus2mqtt.log"
-        )
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> AppConfig:
@@ -328,7 +308,6 @@ class AppConfig(BaseSettings):
 
         # Build config dict excluding defaults where appropriate
         config_dict: dict[str, Any] = {
-            "data_dir": str(self.data_dir),
             "mbus": self.mbus.model_dump(exclude_none=True),
             "mqtt": self.mqtt.model_dump(exclude_none=True),
             "homeassistant": self.homeassistant.model_dump(),
@@ -348,9 +327,6 @@ def generate_example_config() -> str:
     """Generate example configuration YAML."""
     return """\
 # libmbus2mqtt configuration
-
-# Runtime data (SQLite, user templates, and the default log file)
-# data_dir: /data               # Override with LIBMBUS2MQTT_DATA_DIR
 
 # M-Bus Interface
 mbus:
@@ -397,8 +373,8 @@ availability:
 # Logging
 logs:
   level: INFO                   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  save_to_file: false           # Enable file logging
-  # file: /data/log/libmbus2mqtt.log  # Default: <data_dir>/log/libmbus2mqtt.log
+  save_to_file: true            # Enable file logging
+  file:                        # Default: <data-dir>/log/libmbus2mqtt.log
   max_size_mb: 10               # Max file size before rotation (1-1000 MB)
   backup_count: 5               # Number of rotated backup files (0-100)
 """
