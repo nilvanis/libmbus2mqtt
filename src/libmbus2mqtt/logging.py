@@ -8,7 +8,13 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from libmbus2mqtt.constants import LOG_COLORS, LOG_DATE_FORMAT, LOG_FORMAT, LOG_RESET
+from libmbus2mqtt.constants import (
+    LOG_COLORS,
+    LOG_DATE_FORMAT,
+    LOG_DEFAULT_FILE,
+    LOG_FORMAT,
+    LOG_RESET,
+)
 
 if TYPE_CHECKING:
     from libmbus2mqtt.config import LogsConfig
@@ -49,6 +55,7 @@ def _setup_file_handler(
     logger: logging.Logger,
     config: LogsConfig,
     level: int,
+    default_log_file: Path = LOG_DEFAULT_FILE,
 ) -> None:
     """
     Set up rotating file handler.
@@ -58,7 +65,7 @@ def _setup_file_handler(
         config: LogsConfig with file logging settings.
         level: Log level to use for the file handler.
     """
-    log_path = Path(config.file)
+    log_path = config.file if config.file is not None else default_log_file
 
     # Ensure log directory exists
     try:
@@ -89,6 +96,7 @@ def setup_logging(
     level: str = "INFO",
     use_colors: bool | None = None,
     logs_config: LogsConfig | None = None,
+    default_log_file: Path = LOG_DEFAULT_FILE,
 ) -> None:
     """
     Configure application logging.
@@ -117,7 +125,7 @@ def setup_logging(
 
     # Add file handler if configured
     if logs_config and logs_config.save_to_file:
-        _setup_file_handler(root_logger, logs_config, numeric_level)
+        _setup_file_handler(root_logger, logs_config, numeric_level, default_log_file)
 
     # Set level for our package
     logging.getLogger("libmbus2mqtt").setLevel(numeric_level)

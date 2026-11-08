@@ -14,8 +14,8 @@ from libmbus2mqtt.logging import get_logger
 logger = get_logger("templates")
 
 # Cache for loaded templates
-_template_cache: dict[str, dict[str, Any]] = {}
-_user_index_cache: dict[str, dict[str, str | int | None]] | None = None
+_template_cache: dict[tuple[Path, str], dict[str, Any]] = {}
+_user_index_cache: dict[Path, dict[str, dict[str, str | int | None]]] = {}
 _bundled_index_cache: dict[str, dict[str, str | int | None]] | None = None
 
 
@@ -40,19 +40,19 @@ def _load_index_file(path: Path) -> dict[str, dict[str, str | int | None]]:
         return cast(dict[str, dict[str, str | int | None]], json.load(f))
 
 
-def _get_user_index() -> dict[str, dict[str, str | int | None]]:
+def _get_user_index(templates_dir: Path | None = None) -> dict[str, dict[str, str | int | None]]:
     """Load user template index (if present)."""
-    global _user_index_cache
-    if _user_index_cache is not None:
-        return _user_index_cache
+    templates_dir = templates_dir if templates_dir is not None else TEMPLATES_DIR
+    if templates_dir in _user_index_cache:
+        return _user_index_cache[templates_dir]
 
-    user_index = TEMPLATES_DIR / "index.json"
+    user_index = templates_dir / "index.json"
     if user_index.exists():
         logger.debug(f"Loading template index from {user_index}")
-        _user_index_cache = _load_index_file(user_index)
+        _user_index_cache[templates_dir] = _load_index_file(user_index)
     else:
-        _user_index_cache = {}
-    return _user_index_cache
+        _user_index_cache[templates_dir] = {}
+    return _user_index_cache[templates_dir]
 
 
 def _get_bundled_index() -> dict[str, dict[str, str | int | None]]:
@@ -170,6 +170,8 @@ def find_template(
     manufacturer: str,
     product_name: str | None,
     data_record_count: int | None = None,
+    *,
+    templates_dir: Path | None = None,
 ) -> str | None:
     """
     Find matching template filename for a device.
@@ -183,7 +185,7 @@ def find_template(
         Template filename or None if no match
     """
     user_match = _find_template_in_index(
-        _get_user_index(),
+        _get_user_index(templates_dir),
         manufacturer,
         product_name,
         data_record_count,
@@ -223,7 +225,7 @@ def find_template(
     return None
 
 
-def load_template(filename: str) -> dict[str, Any] | None:
+def load_template(filename: str, *, templates_dir: Path | None = None) -> dict[str, Any] | None:
     """
     Load a template by filename.
 
@@ -235,16 +237,18 @@ def load_template(filename: str) -> dict[str, Any] | None:
     Returns:
         Template dict or None if not found
     """
-    if filename in _template_cache:
-        return _template_cache[filename]
+    templates_dir = templates_dir if templates_dir is not None else TEMPLATES_DIR
+    cache_key = (templates_dir, filename)
+    if cache_key in _template_cache:
+        return _template_cache[cache_key]
 
     # Try user templates first
-    user_template = TEMPLATES_DIR / filename
+    user_template = templates_dir / filename
     if user_template.exists():
         logger.debug(f"Loading template from {user_template}")
         with user_template.open() as f:
             template: dict[str, Any] = json.load(f)
-            _template_cache[filename] = template
+            _template_cache[cache_key] = template
             return template
 
     # Fall back to bundled templates
@@ -253,7 +257,7 @@ def load_template(filename: str) -> dict[str, Any] | None:
         logger.debug(f"Loading template from bundled: {filename}")
         with bundled_template.open() as f:
             template = json.load(f)
-            _template_cache[filename] = template
+            _template_cache[cache_key] = template
             return template
 
     logger.warning(f"Template not found: {filename}")
@@ -264,6 +268,8 @@ def get_template_for_device(
     manufacturer: str,
     product_name: str | None,
     data_record_count: int | None = None,
+    *,
+    templates_dir: Path | None = None,
 ) -> dict[str, Any] | None:
     """
     Get template for a device by manufacturer and product name.
@@ -280,6 +286,7 @@ def get_template_for_device(
         manufacturer=manufacturer,
         product_name=product_name,
         data_record_count=data_record_count,
+        templates_dir=templates_dir,
     )
     return selection.template
 
@@ -290,10 +297,11 @@ def resolve_template(
     product_name: str | None,
     data_record_count: int | None,
     explicit_filename: str | None = None,
+    templates_dir: Path | None = None,
 ) -> TemplateSelection:
     """Resolve the template to use for a device."""
     if explicit_filename:
-        template = load_template(explicit_filename)
+        template = load_template(explicit_filename, templates_dir=templates_dir)
         if isinstance(template, dict):
             if not _template_matches_record_count(explicit_filename, template, data_record_count):
                 logger.warning(
@@ -316,13 +324,13 @@ def resolve_template(
         return TemplateSelection(filename=None, template=None, mode="generic", source="generic")
 
     user_match = _find_template_in_index(
-        _get_user_index(),
+        _get_user_index(templates_dir),
         manufacturer,
         product_name,
         data_record_count,
     )
     if user_match is not None:
-        template = load_template(user_match)
+        template = load_template(user_match, templates_dir=templates_dir)
         if isinstance(template, dict) and _template_matches_record_count(
             user_match,
             template,
@@ -342,7 +350,7 @@ def resolve_template(
         data_record_count,
     )
     if bundled_match is not None:
-        template = load_template(bundled_match)
+        template = load_template(bundled_match, templates_dir=templates_dir)
         if isinstance(template, dict) and _template_matches_record_count(
             bundled_match,
             template,
@@ -360,7 +368,7 @@ def resolve_template(
 
 def clear_cache() -> None:
     """Clear template caches."""
-    global _template_cache, _user_index_cache, _bundled_index_cache
-    _template_cache = {}
-    _user_index_cache = None
+    global _bundled_index_cache
+    _template_cache.clear()
+    _user_index_cache.clear()
     _bundled_index_cache = None

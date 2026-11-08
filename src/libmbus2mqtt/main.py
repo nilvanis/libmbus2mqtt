@@ -134,7 +134,7 @@ class Daemon:
 
     def _init_state_store(self) -> None:
         """Initialize persistent runtime state."""
-        self._state_store = StateStore()
+        self._state_store = StateStore(self.config.db_path)
 
     def _init_mqtt(self) -> None:
         """Initialize MQTT client and related components."""
@@ -158,6 +158,7 @@ class Daemon:
                 self._mqtt,
                 self.config.homeassistant,
                 self._state_store,
+                templates_dir=self.config.templates_dir,
             )
 
         self._mqtt.on_connect(self._on_mqtt_connect)

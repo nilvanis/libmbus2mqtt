@@ -356,6 +356,91 @@ devices:
         with pytest.raises(ValidationError):
             AppConfig.from_yaml(config_file)
 
+    @pytest.mark.parametrize("data_dir", [Path("/data"), Path("/var/lib/libmbus2mqtt")])
+    def test_runtime_paths_follow_data_dir(self, data_dir: Path) -> None:
+        config = AppConfig(
+            data_dir=data_dir,
+            mbus=MbusConfig(device="/dev/ttyUSB0"),
+            mqtt=MqttConfig(host="localhost"),
+        )
+        assert config.db_path == data_dir / "libmbus2mqtt.db"
+        assert config.templates_dir == data_dir / "templates"
+        assert config.log_file == data_dir / "log/libmbus2mqtt.log"
+
+    def test_env_overrides_yaml_data_dir_and_preserves_explicit_log_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / "config.yaml"
+        log_file = tmp_path / "custom.log"
+        config_file.write_text(
+            yaml.safe_dump(
+                {
+                    "data_dir": "/unused",
+                    "mbus": {"device": "/dev/ttyUSB0"},
+                    "mqtt": {"host": "localhost"},
+                    "logs": {"file": str(log_file)},
+                }
+            )
+        )
+        monkeypatch.setenv("LIBMBUS2MQTT_DATA_DIR", str(tmp_path / "runtime"))
+        config = AppConfig.load(config_file)
+        assert config.db_path == tmp_path / "runtime/libmbus2mqtt.db"
+        assert config.templates_dir == tmp_path / "runtime/templates"
+        assert config.logs.file == log_file
+
+    def test_save_preserves_data_dir_and_keeps_default_log_path_dynamic(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config = AppConfig(
+            data_dir=tmp_path / "runtime",
+            mbus=MbusConfig(device="/dev/ttyUSB0"),
+            mqtt=MqttConfig(host="localhost"),
+        )
+        config_file = tmp_path / "config.yaml"
+        config.save(config_file)
+        restored = AppConfig.load(config_file)
+        assert restored.db_path == config.db_path
+        assert restored.log_file == config.log_file
+        monkeypatch.setenv("LIBMBUS2MQTT_DATA_DIR", str(tmp_path / "moved"))
+        assert AppConfig.load(config_file).log_file == tmp_path / "moved/log/libmbus2mqtt.log"
+
+    def test_password_override_does_not_leak_into_log_records(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            yaml.safe_dump(
+                {
+                    "mbus": {"device": "/dev/ttyUSB0"},
+                    "mqtt": {"host": "localhost", "password": "yaml-sensitive-value"},
+                }
+            )
+        )
+        monkeypatch.setenv("LIBMBUS2MQTT_MQTT_PASSWORD", "env-sensitive-value")
+        with caplog.at_level("INFO", logger="libmbus2mqtt.config"):
+            config = AppConfig.load(config_file)
+        assert config.mqtt.password == "env-sensitive-value"
+        assert "LIBMBUS2MQTT_MQTT_PASSWORD" in caplog.text
+        assert "***" in caplog.text
+        # Check deferred arguments as well as the rendered message.
+        captured = caplog.text + repr([record.args for record in caplog.records])
+        assert "yaml-sensitive-value" not in captured
+        assert "env-sensitive-value" not in captured
+
+    def test_validation_errors_hide_passwords(self, tmp_path: Path) -> None:
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            yaml.safe_dump(
+                {
+                    "mbus": {"device": "/dev/ttyUSB0"},
+                    "mqtt": {"password": "hidden-on-invalid-config"},
+                }
+            )
+        )
+        with pytest.raises(ValidationError) as error:
+            AppConfig.load(config_file)
+        assert "hidden-on-invalid-config" not in str(error.value)
+
 
 class TestGenerateExampleConfig:
     """Tests for generate_example_config function."""

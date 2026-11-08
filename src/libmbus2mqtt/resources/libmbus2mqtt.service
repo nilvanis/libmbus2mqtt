@@ -11,6 +11,9 @@ Group=dialout
 
 # Configuration file location
 Environment=LIBMBUS2MQTT_CONFIG=/etc/libmbus2mqtt/config.yaml
+Environment=LIBMBUS2MQTT_DATA_DIR=/var/lib/libmbus2mqtt
+StateDirectory=libmbus2mqtt
+StateDirectoryMode=0750
 
 # Working directory
 WorkingDirectory=/var/lib/libmbus2mqtt

@@ -173,7 +173,6 @@ wheels = [
 
 [[package]]
 name = "libmbus2mqtt"
-version = "2.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "paho-mqtt" },
@@ -187,6 +186,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "mypy" },
+    { name = "packaging" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
@@ -196,6 +196,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.20.1" },
+    { name = "packaging", marker = "extra == 'dev'", specifier = ">=26.2" },
     { name = "paho-mqtt", specifier = ">=2.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },

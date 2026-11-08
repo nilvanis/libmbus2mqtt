@@ -6,6 +6,7 @@ import os
 import pwd
 import shutil
 import subprocess
+from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,35 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 console = Console()
+
+
+def get_libmbus_source() -> tuple[str, str]:
+    """Read the source pin shared with Docker from the installed package."""
+    settings = dict(
+        line.split("=", 1)
+        for line in files("libmbus2mqtt").joinpath("resources/libmbus.env").read_text().splitlines()
+        if line and not line.startswith("#")
+    )
+    return settings["LIBMBUS_REPO"], settings["LIBMBUS_COMMIT"]
+
+
+def prepare_libmbus_source(repo_dir: Path, *, dry_run: bool = False) -> None:
+    """Fetch the exact upstream revision and apply the shared TCP timeout patch."""
+    from importlib.resources import as_file
+
+    repo, commit = get_libmbus_source()
+    run_command(["git", "init", str(repo_dir)], dry_run=dry_run)
+    run_command(["git", "fetch", "--depth", "1", repo, commit], cwd=repo_dir, dry_run=dry_run)
+    run_command(["git", "checkout", "--detach", commit], cwd=repo_dir, dry_run=dry_run)
+    patch = files("libmbus2mqtt").joinpath("resources/libmbus-tcp-timeout.patch")
+    with as_file(patch) as patch_path:
+        run_command(["git", "apply", "--check", str(patch_path)], cwd=repo_dir, dry_run=dry_run)
+        run_command(["git", "apply", str(patch_path)], cwd=repo_dir, dry_run=dry_run)
+
+
+def get_service_content() -> str:
+    """Read the systemd unit included in both wheel and source installations."""
+    return files("libmbus2mqtt").joinpath("resources/libmbus2mqtt.service").read_text()
 
 
 def is_root() -> bool:

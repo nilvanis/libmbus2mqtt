@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import MagicMock, call
 
@@ -56,7 +57,7 @@ def daemon(minimal_app_config, state_store: StateStore) -> Daemon:
 
 def count_identities(state_store: StateStore) -> int:
     """Return number of persisted device identities."""
-    with sqlite3.connect(state_store.db_path) as conn:
+    with closing(sqlite3.connect(state_store.db_path)) as conn:
         row = conn.execute("SELECT COUNT(*) FROM device_identity").fetchone()
     return 0 if row is None else int(row[0])
 

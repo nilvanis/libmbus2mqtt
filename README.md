@@ -142,7 +142,7 @@ libmbus2mqtt can install libmbus for you:
 
 ```bash
 # Install dependencies first (Debian/Ubuntu)
-sudo apt-get install git build-essential libtool autoconf automake
+sudo apt-get install ca-certificates git build-essential libtool libltdl-dev autoconf automake
 
 # Clone and install libmbus2mqtt
 git clone https://github.com/nilvanis/libmbus2mqtt
@@ -214,6 +214,14 @@ sudo libmbus2mqtt uninstall
 
 Configuration is stored in a YAML file. By default, libmbus2mqtt looks for `/data/config/config.yaml`.
 
+Runtime data is stored in `data_dir` (default `/data`), independently of the
+configuration file location. Set it in YAML or with `LIBMBUS2MQTT_DATA_DIR`.
+The SQLite state database is `<data_dir>/libmbus2mqtt.db`, custom templates are
+in `<data_dir>/templates/`, and the default file log, when enabled, is
+`<data_dir>/log/libmbus2mqtt.log`. An explicit `logs.file` takes precedence.
+The installed systemd service sets `data_dir` to `/var/lib/libmbus2mqtt` and
+loads configuration from `/etc/libmbus2mqtt/config.yaml`.
+
 ### Minimal Configuration
 
 Only two settings are required:
@@ -275,7 +283,7 @@ availability:
 logs:
   level: INFO                   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
   save_to_file: false           # Enable file logging
-  file: data/log/libmbus2mqtt.log  # Log file path
+  # file: /data/log/libmbus2mqtt.log  # Default: <data_dir>/log/libmbus2mqtt.log
   max_size_mb: 10               # Max file size before rotation (1-1000 MB)
   backup_count: 5               # Number of rotated backup files (0-100)
 ```
@@ -286,6 +294,7 @@ Environment variables can be used to provide config values (handy in Docker). Wh
 Env var naming convention is based on config.yaml: `LIBMBUS2MQTT_SECTION_OPTION`. Below is complete list:
 
 ```
+LIBMBUS2MQTT_DATA_DIR
 LIBMBUS2MQTT_MBUS_DEVICE
 LIBMBUS2MQTT_MBUS_BAUDRATE
 LIBMBUS2MQTT_MBUS_POLL_INTERVAL
@@ -730,6 +739,35 @@ If your device isn't listed, libmbus2mqtt should still work - it creates generic
 ## Contributing
 
 Contributions are welcome! Please open an issue or pull request on [GitHub](https://github.com/nilvanis/libmbus2mqtt).
+
+Run the local checks with:
+
+```bash
+uv sync --locked --extra dev
+uv run --no-sync ruff check src tests scripts
+uv run --no-sync ruff format --check src tests scripts
+uv run --no-sync mypy src
+uv run --no-sync pytest
+uv build
+uv run --no-sync python scripts/smoke_package.py dist/*.whl
+docker build -t libmbus2mqtt:test .
+python3 scripts/smoke_container.py libmbus2mqtt:test
+```
+
+The package check installs the wheel into a temporary environment outside the
+checkout. The container check uses a temporary Mosquitto broker, a simulated
+M-Bus meter, and temporary storage; it cleans up its containers and network.
+
+Docker installs runtime dependencies from `uv.lock`. Its uv and Python versions
+are pinned in `Dockerfile`. The upstream libmbus commit is recorded in
+`src/libmbus2mqtt/resources/libmbus.env`; both Docker and the native installer use
+that revision and `libmbus-tcp-timeout.patch`. Review and test changes to these
+pins explicitly.
+
+The package version is defined only in `src/libmbus2mqtt/_version.py`. A release
+tag must match that version. Release publication requires the same lint, type,
+test, installed-wheel, and container checks used by CI. Unreleased changes are
+recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## Support
 

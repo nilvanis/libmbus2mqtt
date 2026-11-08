@@ -96,7 +96,9 @@ def run(
 
     # CLI --log-level overrides config if provided
     effective_level = log_level if log_level else app_config.logs.level
-    setup_logging(level=effective_level, logs_config=app_config.logs)
+    setup_logging(
+        level=effective_level, logs_config=app_config.logs, default_log_file=app_config.log_file
+    )
 
     # Import and run main loop
     from libmbus2mqtt.main import run_daemon
@@ -127,7 +129,9 @@ def scan(
 
     # CLI --log-level overrides config if provided
     effective_level = log_level if log_level else app_config.logs.level
-    setup_logging(level=effective_level, logs_config=app_config.logs)
+    setup_logging(
+        level=effective_level, logs_config=app_config.logs, default_log_file=app_config.log_file
+    )
 
     # Import and run scan
     from libmbus2mqtt.mbus.interface import MbusInterface
@@ -261,6 +265,7 @@ def install(
     )
     from libmbus2mqtt.installer import (
         confirm_action,
+        get_service_content,
         require_root,
         run_command,
         user_exists,
@@ -289,6 +294,9 @@ def install(
         raise typer.Exit(0)
 
     console.print()
+
+    # Resolve the packaged unit before making any system changes.
+    service_content = get_service_content()
 
     # Create service user
     if not user_exists(SERVICE_USER):
@@ -323,20 +331,14 @@ def install(
         shutil.chown(SERVICE_DATA_DIR, user=SERVICE_USER, group=SERVICE_GROUP)
         console.print(f"  [green]Created {SERVICE_DATA_DIR}[/green]")
 
-    # Find and copy service file
+    # Install the service resource shipped in the wheel.
     console.print("Installing service file...")
-    service_src = _find_service_file()
-    if service_src is None:
-        console.print("[red]Error:[/red] Could not find libmbus2mqtt.service file")
-        console.print("Expected in package's systemd/ directory")
-        raise typer.Exit(1)
-
     service_dest = SYSTEMD_SERVICE_DIR / SYSTEMD_SERVICE_NAME
 
     if dry_run:
-        run_command(["cp", str(service_src), str(service_dest)], dry_run=True)
+        console.print(f"  Would write bundled service to {service_dest}")
     else:
-        shutil.copy2(service_src, service_dest)
+        service_dest.write_text(service_content)
         service_dest.chmod(0o644)
         console.print(f"  [green]Installed {service_dest}[/green]")
 
@@ -372,26 +374,6 @@ def install(
         console.print(
             f"  4. Check status:  [bold]sudo systemctl status {SYSTEMD_SERVICE_NAME}[/bold]"
         )
-
-
-def _find_service_file() -> Path | None:
-    """Locate the bundled systemd service file."""
-    import libmbus2mqtt
-
-    pkg_dir = Path(libmbus2mqtt.__file__).parent
-
-    # Check various possible locations
-    candidates = [
-        pkg_dir.parent.parent / "systemd" / "libmbus2mqtt.service",  # Development
-        pkg_dir / "systemd" / "libmbus2mqtt.service",  # If bundled in package
-        Path("/usr/share/libmbus2mqtt/libmbus2mqtt.service"),  # System install
-    ]
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-
-    return None
 
 
 @app.command()
@@ -662,13 +644,14 @@ def libmbus_install(
     from libmbus2mqtt.constants import (
         LIBMBUS_BINARIES,
         LIBMBUS_BUILD_DIR,
-        LIBMBUS_REPO,
     )
     from libmbus2mqtt.installer import (
         check_command_available,
         confirm_action,
         find_libmbus_binaries,
+        get_libmbus_source,
         is_libmbus_installed,
+        prepare_libmbus_source,
         require_root,
         run_command,
     )
@@ -698,7 +681,7 @@ def libmbus_install(
     dep_checks = {
         "git": "git",
         "build-essential": "gcc",
-        "libtool": "libtool",
+        "libtool": "libtoolize",
         "autoconf": "autoconf",
         "automake": "automake",
     }
@@ -711,6 +694,12 @@ def libmbus_install(
             console.print(f"  [red]MISSING[/red] {pkg}")
             missing_deps.append(pkg)
 
+    if check_command_available("aclocal"):
+        result = run_command(["aclocal", "--print-ac-dir"], capture_output=True)
+        if result is not None and not (Path(result.stdout.strip()) / "ltdl.m4").is_file():
+            console.print("  [red]MISSING[/red] libltdl-dev (ltdl.m4)")
+            missing_deps.append("libltdl-dev")
+
     if missing_deps:
         console.print()
         console.print("[red]Error:[/red] Missing build dependencies")
@@ -722,7 +711,8 @@ def libmbus_install(
 
     # Show plan and confirm
     console.print("This will:")
-    console.print(f"  1. Clone {LIBMBUS_REPO}")
+    source_repo, source_commit = get_libmbus_source()
+    console.print(f"  1. Fetch {source_repo} at {source_commit} and apply the TCP timeout patch")
     console.print(f"  2. Build libmbus in {LIBMBUS_BUILD_DIR}")
     console.print(f"  3. Install binaries to {install_path}")
     console.print(f"     - {', '.join(LIBMBUS_BINARIES)}")
@@ -749,24 +739,18 @@ def libmbus_install(
         build_dir.mkdir(parents=True, exist_ok=True)
 
     # Clone repository
-    console.print("Cloning libmbus repository...")
+    console.print("Preparing pinned libmbus sources...")
     if dry_run:
-        run_command(
-            ["git", "clone", "--depth", "1", LIBMBUS_REPO, str(repo_dir)],
-            dry_run=True,
-        )
+        prepare_libmbus_source(repo_dir, dry_run=True)
     else:
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            progress.add_task("Cloning...", total=None)
-            run_command(
-                ["git", "clone", "--depth", "1", LIBMBUS_REPO, str(repo_dir)],
-                capture_output=True,
-            )
-        console.print("  [green]Repository cloned[/green]")
+            progress.add_task("Fetching and patching...", total=None)
+            prepare_libmbus_source(repo_dir)
+        console.print("  [green]Pinned sources ready[/green]")
 
     # Build libmbus
     console.print("Building libmbus...")
@@ -797,10 +781,14 @@ def libmbus_install(
     # Install
     console.print("Installing binaries and libraries...")
     if dry_run:
-        run_command(["make", "install"], dry_run=True, description="Install to system")
+        run_command(
+            ["make", "install", f"bindir={install_path}"],
+            dry_run=True,
+            description="Install to system",
+        )
     else:
         result = subprocess.run(
-            ["make", "install"],
+            ["make", "install", f"bindir={install_path}"],
             cwd=repo_dir,
             capture_output=True,
             text=True,

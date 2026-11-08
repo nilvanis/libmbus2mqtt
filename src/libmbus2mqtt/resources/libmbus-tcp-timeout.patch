@@ -1,0 +1,7 @@
+diff --git a/mbus/mbus-tcp.c b/mbus/mbus-tcp.c
+--- a/mbus/mbus-tcp.c
++++ b/mbus/mbus-tcp.c
+@@ -29,2 +29,2 @@
+-static int tcp_timeout_sec = 4;
++static int tcp_timeout_sec = 1;
+ static int tcp_timeout_usec = 0;

@@ -2,9 +2,11 @@
 
 from pathlib import Path
 
+from libmbus2mqtt._version import __version__
+
 # Application info
 APP_NAME = "libmbus2mqtt"
-APP_VERSION = "2.1.0"
+APP_VERSION = __version__
 
 # Paths
 DEFAULT_DATA_DIR = Path("/data")
@@ -51,7 +53,6 @@ POLLING_DEFAULT_STARTUP_DELAY = 5
 AVAILABILITY_DEFAULT_TIMEOUT_POLLS = 3
 
 # Libmbus
-LIBMBUS_REPO = "https://github.com/rscada/libmbus.git"
 LIBMBUS_SERIAL_BINARIES = ["mbus-serial-scan", "mbus-serial-request-data"]
 LIBMBUS_TCP_BINARIES = ["mbus-tcp-scan", "mbus-tcp-request-data"]
 LIBMBUS_BINARIES = LIBMBUS_SERIAL_BINARIES + LIBMBUS_TCP_BINARIES

@@ -1,81 +1,58 @@
-# Multi-stage Dockerfile for libmbus2mqtt
-# Stage 1: Build libmbus from source
+# Stage 1: Build the pinned libmbus sources with the shared TCP timeout patch.
 FROM debian:bookworm-slim AS libmbus-builder
 
-RUN apt-get update && apt-get install -y \
-    git \
-    build-essential \
-    libtool \
-    autoconf \
-    automake \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates git build-essential libtool libltdl-dev autoconf automake \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-
-# Clone and build libmbus
-# Adjust libmbus TCP timeout from 4 seconds to 1 second
-RUN git clone --depth 1 https://github.com/rscada/libmbus.git && \
+COPY src/libmbus2mqtt/resources/libmbus.env ./libmbus.env
+COPY src/libmbus2mqtt/resources/libmbus-tcp-timeout.patch ./libmbus-tcp-timeout.patch
+RUN . ./libmbus.env && \
+    git init libmbus && \
     cd libmbus && \
-    sed -i 's/^static int tcp_timeout_sec = 4;$/static int tcp_timeout_sec = 1;/' mbus/mbus-tcp.c && \
+    git fetch --depth 1 "$LIBMBUS_REPO" "$LIBMBUS_COMMIT" && \
+    git checkout --detach "$LIBMBUS_COMMIT" && \
+    git apply --check ../libmbus-tcp-timeout.patch && \
+    git apply ../libmbus-tcp-timeout.patch && \
     ./build.sh && \
     make install DESTDIR=/install
 
-# Stage 2: Build Python package
-FROM python:3.14-slim-bookworm AS python-builder
+# Stage 2: Install the project and runtime dependencies from uv.lock.
+FROM python:3.14.6-slim-bookworm AS python-builder
+COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /usr/local/bin/uv
 
 WORKDIR /app
-
-# Install uv for faster dependency resolution
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-# Copy project files
-COPY pyproject.toml README.md ./
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_LINK_MODE=copy
+COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
+RUN uv sync --locked --no-dev --no-editable
 
-# Build wheel
-RUN uv build --wheel
-
-# Stage 3: Runtime image
-FROM python:3.14-slim-bookworm
-
-# Labels
+# Stage 3: Runtime image.
+FROM python:3.14.6-slim-bookworm
 LABEL org.opencontainers.image.title="libmbus2mqtt"
 LABEL org.opencontainers.image.description="M-Bus to MQTT bridge with Home Assistant integration"
 LABEL org.opencontainers.image.source="https://github.com/nilvanis/libmbus2mqtt"
 
-# Install runtime dependencies for libmbus
-RUN apt-get update && apt-get install -y \
-    libxml2 \
+RUN apt-get update && apt-get install -y --no-install-recommends libxml2 \
     && rm -rf /var/lib/apt/lists/*
-
-# Copy libmbus binaries and libraries from builder
 COPY --from=libmbus-builder /install/usr/local/bin/mbus-* /usr/local/bin/
 COPY --from=libmbus-builder /install/usr/local/lib/libmbus* /usr/local/lib/
-
-# Update library cache
+COPY --from=libmbus-builder /build/libmbus.env /usr/local/share/libmbus2mqtt/libmbus.env
 RUN ldconfig
 
-# Copy Python wheel and install
-COPY --from=python-builder /app/dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl && rm /tmp/*.whl
+COPY --from=python-builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH" \
+    LIBMBUS2MQTT_CONFIG=/data/config/config.yaml \
+    LIBMBUS2MQTT_DATA_DIR=/data
 
-# Create data directory structure
-RUN mkdir -p /data/config /data/templates
-
-# Set environment variable for config location
-ENV LIBMBUS2MQTT_CONFIG=/data/config/config.yaml
-
-# Volume for configuration and templates
-VOLUME ["/data"]
-
-# Run as non-root user
 RUN useradd -r -s /bin/false libmbus2mqtt && \
+    mkdir -p /data/config /data/templates && \
     chown -R libmbus2mqtt:libmbus2mqtt /data
 USER libmbus2mqtt
-
-# Create config.yaml during build so the image has a ready-to-edit config
 RUN libmbus2mqtt config init --config /data/config/config.yaml
-
-# Run the application
+VOLUME ["/data"]
 ENTRYPOINT ["libmbus2mqtt"]
 CMD ["run"]
