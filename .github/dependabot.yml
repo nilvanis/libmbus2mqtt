@@ -1,8 +1,11 @@
 version: 2
+# Updates go to dev; main only receives release PRs from dev, merged with
+# "Rebase and merge" so main keeps the individual commits.
 updates:
   # Python dependencies
   - package-ecosystem: "pip"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -22,6 +25,7 @@ updates:
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -34,6 +38,7 @@ updates:
   # Docker base images
   - package-ecosystem: "docker"
     directory: "/"
+    target-branch: "dev"
     schedule:
       interval: "weekly"
       day: "monday"
