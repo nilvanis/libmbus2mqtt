@@ -44,8 +44,7 @@ COPY --from=libmbus-builder /build/libmbus.env /usr/local/share/libmbus2mqtt/lib
 RUN ldconfig
 
 COPY --from=python-builder /opt/venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH" \
-    LIBMBUS2MQTT_CONFIG=/data/config/config.yaml
+ENV PATH="/opt/venv/bin:$PATH"
 
 RUN useradd -r -s /bin/false libmbus2mqtt && \
     mkdir -p /data/config /data/templates && \
@@ -54,4 +53,4 @@ USER libmbus2mqtt
 RUN libmbus2mqtt config init --config /data/config/config.yaml
 VOLUME ["/data"]
 ENTRYPOINT ["libmbus2mqtt"]
-CMD ["run", "--data-dir", "/data"]
+CMD ["run", "--config", "/data/config/config.yaml", "--data-dir", "/data"]

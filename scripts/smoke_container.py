@@ -50,6 +50,7 @@ def main() -> None:
         # Keep test-created files removable by the host after the container exits.
         (data / "log").mkdir(mode=0o777)
         (data / "log").chmod(0o777)
+        (data / "config").mkdir()
         shutil.copyfile(fixture, work / "payload.xml")
         adapter = work / "mbus-serial-request-data"
         adapter.write_text("#!/bin/sh\ncat /smoke/payload.xml\n")
@@ -74,7 +75,7 @@ def main() -> None:
                 }
             )
         )
-        (work / "config.yaml").write_text("""\
+        (data / "config/config.yaml").write_text("""\
 mbus:
   device: /dev/simulated-mbus
   autoscan: false
@@ -101,6 +102,7 @@ devices:
 import os, subprocess
 assert os.geteuid() != 0, 'Container must run as a non-root user'
 assert 'LIBMBUS2MQTT_DATA_DIR' not in os.environ
+assert 'LIBMBUS2MQTT_CONFIG' not in os.environ
 for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'mbus-tcp-request-data']:
     result = subprocess.run([name], capture_output=True, timeout=5)
     assert result.returncode in (0, 1), (name, result.stderr)
@@ -144,8 +146,6 @@ for name in ['mbus-serial-scan', 'mbus-serial-request-data', 'mbus-tcp-scan', 'm
                 "ALL",
                 "--env",
                 "PYTHONDONTWRITEBYTECODE=1",
-                "--env",
-                "LIBMBUS2MQTT_CONFIG=/smoke/config.yaml",
                 "--mount",
                 f"type=bind,source={work},target=/smoke,readonly",
                 "--mount",
