@@ -2,15 +2,19 @@
 
 from pathlib import Path
 
+from libmbus2mqtt._version import __version__
+
 # Application info
 APP_NAME = "libmbus2mqtt"
-APP_VERSION = "2.1.0"
+APP_VERSION = __version__
 
-# Paths
-DEFAULT_DATA_DIR = Path("/data")
-CONFIG_DIR = DEFAULT_DATA_DIR / "config"
+# Paths. Defaults follow the native (systemd) layout; the Docker image points the
+# CLI at /data through LIBMBUS2MQTT_CONFIG and LIBMBUS2MQTT_DATA_DIR.
+SERVICE_CONFIG_DIR = Path("/etc/libmbus2mqtt")
+SERVICE_DATA_DIR = Path("/var/lib/libmbus2mqtt")
+DEFAULT_CONFIG_FILE = SERVICE_CONFIG_DIR / "config.yaml"
+DEFAULT_DATA_DIR = SERVICE_DATA_DIR
 TEMPLATES_DIR = DEFAULT_DATA_DIR / "templates"
-DEFAULT_CONFIG_FILE = CONFIG_DIR / "config.yaml"
 DEFAULT_DB_FILE = DEFAULT_DATA_DIR / "libmbus2mqtt.db"
 
 # M-Bus
@@ -27,6 +31,7 @@ MBUS_DEFAULT_SCAN_TIMEOUT = (
 
 # MQTT
 MQTT_DEFAULT_PORT = 1883
+MQTT_DEFAULT_TLS_PORT = 8883
 MQTT_DEFAULT_KEEPALIVE = 60
 MQTT_DEFAULT_QOS = 1
 MQTT_DEFAULT_BASE_TOPIC = "libmbus2mqtt"
@@ -51,12 +56,10 @@ POLLING_DEFAULT_STARTUP_DELAY = 5
 AVAILABILITY_DEFAULT_TIMEOUT_POLLS = 3
 
 # Libmbus
-LIBMBUS_REPO = "https://github.com/rscada/libmbus.git"
 LIBMBUS_SERIAL_BINARIES = ["mbus-serial-scan", "mbus-serial-request-data"]
 LIBMBUS_TCP_BINARIES = ["mbus-tcp-scan", "mbus-tcp-request-data"]
 LIBMBUS_BINARIES = LIBMBUS_SERIAL_BINARIES + LIBMBUS_TCP_BINARIES
 LIBMBUS_DEFAULT_INSTALL_PATH = Path("/usr/local/bin")
-LIBMBUS_BUILD_DIR = Path("/tmp/libmbus-build")
 
 # Systemd service installation
 SYSTEMD_SERVICE_NAME = "libmbus2mqtt.service"
@@ -65,10 +68,6 @@ SYSTEMD_SERVICE_DIR = Path("/etc/systemd/system")
 # Service user/group
 SERVICE_USER = "libmbus2mqtt"
 SERVICE_GROUP = "dialout"
-
-# Service directories
-SERVICE_CONFIG_DIR = Path("/etc/libmbus2mqtt")
-SERVICE_DATA_DIR = Path("/var/lib/libmbus2mqtt")
 
 # Logging (fixed format, not user-configurable)
 LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"

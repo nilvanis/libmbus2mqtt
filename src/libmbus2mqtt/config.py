@@ -19,7 +19,6 @@ from libmbus2mqtt.constants import (
     ENV_PREFIX,
     HA_DEFAULT_DISCOVERY_PREFIX,
     LOG_DEFAULT_BACKUP_COUNT,
-    LOG_DEFAULT_FILE,
     LOG_DEFAULT_MAX_SIZE_MB,
     LOG_LEVELS,
     MBUS_BAUDRATES,
@@ -33,6 +32,7 @@ from libmbus2mqtt.constants import (
     MQTT_DEFAULT_KEEPALIVE,
     MQTT_DEFAULT_PORT,
     MQTT_DEFAULT_QOS,
+    MQTT_DEFAULT_TLS_PORT,
     POLLING_DEFAULT_INTERVAL,
     POLLING_DEFAULT_STARTUP_DELAY,
 )
@@ -59,6 +59,11 @@ ENV_VAR_PATHS: dict[str, EnvPath] = {
     f"{ENV_PREFIX}_MQTT_KEEPALIVE": ("mqtt", "keepalive"),
     f"{ENV_PREFIX}_MQTT_QOS": ("mqtt", "qos"),
     f"{ENV_PREFIX}_MQTT_BASE_TOPIC": ("mqtt", "base_topic"),
+    f"{ENV_PREFIX}_MQTT_TLS_ENABLED": ("mqtt", "tls", "enabled"),
+    f"{ENV_PREFIX}_MQTT_TLS_CA_CERTS": ("mqtt", "tls", "ca_certs"),
+    f"{ENV_PREFIX}_MQTT_TLS_CERTFILE": ("mqtt", "tls", "certfile"),
+    f"{ENV_PREFIX}_MQTT_TLS_KEYFILE": ("mqtt", "tls", "keyfile"),
+    f"{ENV_PREFIX}_MQTT_TLS_INSECURE": ("mqtt", "tls", "insecure"),
     # Home Assistant
     f"{ENV_PREFIX}_HOMEASSISTANT_ENABLED": ("homeassistant", "enabled"),
     f"{ENV_PREFIX}_HOMEASSISTANT_DISCOVERY_PREFIX": ("homeassistant", "discovery_prefix"),
@@ -109,12 +114,13 @@ def _merge_env_with_config(config_dict: dict[str, Any]) -> dict[str, Any]:
         exists, existing_value = _get_nested(merged, path)
 
         if exists:
+            sensitive = path[-1] in {"password", "token", "secret"}
             logger.info(
                 "Env %s overrides config %s (config=%s, env=%s)",
                 env_var,
                 ".".join(path),
-                existing_value,
-                env_value,
+                "***" if sensitive else existing_value,
+                "***" if sensitive else env_value,
             )
 
         _set_nested(merged, path, env_value)
@@ -156,22 +162,75 @@ class MbusConfig(BaseModel):
         return self
 
 
+class MqttTlsConfig(BaseModel):
+    """TLS for the broker connection."""
+
+    enabled: bool = Field(default=False, description="Connect to the broker over TLS")
+    ca_certs: Path | None = Field(
+        default=None,
+        description="CA certificate(s) that signed the broker certificate (default: system CAs)",
+    )
+    certfile: Path | None = Field(
+        default=None, description="Client certificate, for brokers that require one"
+    )
+    keyfile: Path | None = Field(
+        default=None, description="Private key of the client certificate, if not in certfile"
+    )
+    insecure: bool = Field(
+        default=False,
+        description=(
+            "Do not verify the broker certificate: accept self-signed certificates and "
+            "any host name. The connection stays encrypted."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def check_files(self) -> MqttTlsConfig:
+        if self.keyfile is not None and self.certfile is None:
+            raise ValueError("mqtt.tls.keyfile requires mqtt.tls.certfile")
+        log = logging.getLogger("libmbus2mqtt.config")
+        if not self.enabled and any((self.ca_certs, self.certfile, self.keyfile)):
+            log.warning(
+                "mqtt.tls certificate files are set but mqtt.tls.enabled is false: "
+                "connecting without TLS"
+            )
+        if self.enabled and self.insecure and self.ca_certs is not None:
+            log.warning(
+                "mqtt.tls.ca_certs is not used: mqtt.tls.insecure is true, so the broker "
+                "certificate is not verified"
+            )
+        return self
+
+
 class MqttConfig(BaseModel):
     """MQTT broker configuration."""
 
     host: str = Field(..., description="MQTT broker host (required)")
-    port: int = Field(default=MQTT_DEFAULT_PORT, ge=1, le=65535, description="MQTT broker port")
+    port: int = Field(
+        default=MQTT_DEFAULT_PORT,
+        ge=1,
+        le=65535,
+        description=f"MQTT broker port (default {MQTT_DEFAULT_PORT}, {MQTT_DEFAULT_TLS_PORT} with TLS)",
+    )
     username: str | None = Field(default=None, description="MQTT username")
     password: str | None = Field(default=None, description="MQTT password")
     client_id: str | None = Field(default=None, description="MQTT client ID")
     keepalive: int = Field(default=MQTT_DEFAULT_KEEPALIVE, ge=1, description="Keepalive interval")
     qos: int = Field(default=MQTT_DEFAULT_QOS, ge=0, le=2, description="QoS level")
     base_topic: str = Field(default=MQTT_DEFAULT_BASE_TOPIC, description="Base MQTT topic")
+    tls: MqttTlsConfig = Field(default_factory=MqttTlsConfig)
 
     @model_validator(mode="after")
     def generate_client_id(self) -> MqttConfig:
         if self.client_id is None:
             self.client_id = f"libmbus2mqtt-{uuid4().hex[:8]}"
+        return self
+
+    @model_validator(mode="after")
+    def default_tls_port(self) -> MqttConfig:
+        """Use the standard MQTT-over-TLS port unless a port was given explicitly."""
+        if self.tls.enabled and "port" not in self.model_fields_set:
+            self.port = MQTT_DEFAULT_TLS_PORT
         return self
 
 
@@ -220,12 +279,12 @@ class LogsConfig(BaseModel):
         description="Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
     )
     save_to_file: bool = Field(
-        default=False,
+        default=True,
         description="Enable file logging",
     )
-    file: Path = Field(
-        default=LOG_DEFAULT_FILE,
-        description="Log file path",
+    file: Path | None = Field(
+        default=None,
+        description="Log file path (defaults to <data-dir>/log/libmbus2mqtt.log)",
     )
     max_size_mb: int = Field(
         default=LOG_DEFAULT_MAX_SIZE_MB,
@@ -256,6 +315,7 @@ class AppConfig(BaseSettings):
         env_nested_delimiter="_",
         case_sensitive=False,
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
     mbus: MbusConfig
@@ -308,10 +368,10 @@ class AppConfig(BaseSettings):
         # Build config dict excluding defaults where appropriate
         config_dict: dict[str, Any] = {
             "mbus": self.mbus.model_dump(exclude_none=True),
-            "mqtt": self.mqtt.model_dump(exclude_none=True),
+            "mqtt": self.mqtt.model_dump(mode="json", exclude_none=True),
             "homeassistant": self.homeassistant.model_dump(),
             "availability": self.availability.model_dump(),
-            "logs": self.logs.model_dump(mode="json"),
+            "logs": self.logs.model_dump(mode="json", exclude_none=True),
         }
 
         if self.devices:
@@ -343,13 +403,19 @@ mbus:
 # MQTT Broker
 mqtt:
   host: 192.168.1.100           # REQUIRED - Broker IP or hostname
-  port: 1883                    # Broker port
+  port: 1883                    # Broker port (usually 8883 with TLS)
 #  username:                     # Username (if required)
 #  password:                     # Password (if required)
   client_id: libmbus2mqtt       # Client ID (auto-generated if empty)
   keepalive: 60                 # Connection keepalive in seconds
   qos: 1                        # Message quality of service (0, 1, or 2)
   base_topic: libmbus2mqtt      # Base MQTT topic
+#  tls:                          # Encrypted connection
+#    enabled: true
+#    ca_certs: /path/to/ca.crt   # CA that signed the broker certificate (default: system CAs)
+#    certfile: /path/to/client.crt  # Client certificate, if the broker requires one
+#    keyfile: /path/to/client.key   # Client key, if not included in certfile
+#    insecure: false             # true = don't verify the broker certificate (accepts self-signed)
 
 # Home Assistant Integration
 homeassistant:
@@ -372,8 +438,8 @@ availability:
 # Logging
 logs:
   level: INFO                   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  save_to_file: true           # Enable file logging
-  file: data/log/libmbus2mqtt.log  # Log file path
+  save_to_file: true            # Enable file logging
+  file:                        # Default: <data-dir>/log/libmbus2mqtt.log
   max_size_mb: 10               # Max file size before rotation (1-1000 MB)
   backup_count: 5               # Number of rotated backup files (0-100)
 """

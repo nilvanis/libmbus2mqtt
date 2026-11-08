@@ -9,6 +9,9 @@ services:
       # M-Bus serial device - adjust path as needed
       - /dev/ttyUSB0:/dev/ttyUSB0
     environment:
+      # Owner of ./data on the host (check with: id -u / id -g)
+      PUID: 1000
+      PGID: 1000
       # Override config values via environment variables
       # LIBMBUS2MQTT_MBUS_DEVICE: /dev/ttyUSB0
       # LIBMBUS2MQTT_MQTT_HOST: 192.168.1.100
@@ -16,5 +19,12 @@ services:
       # LIBMBUS2MQTT_MQTT_PASSWORD: password
       # LIBMBUS2MQTT_HOMEASSISTANT_ENABLED: "true"
       TZ: Europe/London
+    # Hardened alternative: never start as root. ./data must then already be owned
+    # by this uid:gid, and the adapter's group must be added explicitly
+    # (find it with: stat -c %g /dev/ttyUSB0).
+    # user: "1000:1000"
+    # group_add: ["20"]
+    # read_only: true
+    # cap_drop: [ALL]
     # Optional: connect to MQTT broker on host network
     # network_mode: host

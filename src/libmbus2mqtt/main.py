@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import signal
+import threading
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from libmbus2mqtt.constants import APP_VERSION, TOPIC_DEVICE_STATE
+from libmbus2mqtt.constants import APP_VERSION, DEFAULT_DATA_DIR, TOPIC_DEVICE_STATE
 from libmbus2mqtt.logging import get_logger
 from libmbus2mqtt.mbus.interface import MbusInterface
 from libmbus2mqtt.models.device import AvailabilityStatus, Device
@@ -20,10 +21,15 @@ from libmbus2mqtt.mqtt import (
 from libmbus2mqtt.state import StateStore, build_identity_key, utcnow_iso
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from libmbus2mqtt.config import AppConfig
     from libmbus2mqtt.state import DeviceSnapshotRecord
 
 logger = get_logger("main")
+
+# Upper bound for how long a shutdown request can go unnoticed while sleeping.
+_STOP_CHECK_INTERVAL = 0.5
 
 
 @dataclass(frozen=True)
@@ -39,10 +45,16 @@ class DeviceSyncResult:
 class Daemon:
     """Main daemon class managing the polling loop."""
 
-    def __init__(self, config: AppConfig) -> None:
+    def __init__(self, config: AppConfig, *, data_dir: Path = DEFAULT_DATA_DIR) -> None:
         self.config = config
-        self._running = False
-        self._rescan_requested = False
+        self._data_dir = data_dir
+        # Set from the signal handler, so it must stay a plain flag: threading.Event
+        # uses a non-reentrant lock and could deadlock when set inside a handler.
+        self._stop_requested = False
+        # Requests queued by MQTT callbacks (network thread), served by the main loop.
+        self._rescan_requested = threading.Event()
+        self._republish_requested = threading.Event()
+        self._wake = threading.Event()
         self._poll_interval = config.mbus.poll_interval
 
         # Components
@@ -66,35 +78,27 @@ class Daemon:
         )
         logger.info(f"Poll interval: {self._poll_interval}s")
 
-        # Set up signal handlers
+        # Install handlers before any long step: a scan can take many minutes.
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
 
         try:
-            # Initialize state store
             self._init_state_store()
-
-            # Initialize M-Bus interface
             self._init_mbus()
-
-            # Initialize devices from config
             self._init_devices()
-
-            # Initialize MQTT client
             self._init_mqtt()
+            # The connect callback only queues work; publish from the main thread.
+            self._process_republish_request()
 
-            # Run initial scan if autoscan enabled
-            if self.config.mbus.autoscan:
+            if self.config.mbus.autoscan and not self._stop_requested:
                 self._scan_devices()
 
-            # Startup delay
-            if self.config.mbus.startup_delay > 0:
+            if self.config.mbus.startup_delay > 0 and not self._stop_requested:
                 logger.info(f"Waiting {self.config.mbus.startup_delay}s before first poll...")
-                time.sleep(self.config.mbus.startup_delay)
+                self._sleep(self.config.mbus.startup_delay, wake_on_requests=False)
 
-            # Main loop
-            self._running = True
-            self._run_loop()
+            if not self._stop_requested:
+                self._run_loop()
 
         except KeyboardInterrupt:
             logger.info("Interrupted by user")
@@ -108,7 +112,10 @@ class Daemon:
         """Handle shutdown signals."""
         sig_name = signal.Signals(signum).name
         logger.info(f"Received {sig_name}, shutting down...")
-        self._running = False
+        self._stop_requested = True
+
+    def _should_stop(self) -> bool:
+        return self._stop_requested
 
     def _init_mbus(self) -> None:
         """Initialize M-Bus interface."""
@@ -118,6 +125,7 @@ class Daemon:
             baudrate=self.config.mbus.baudrate,
             retry_count=self.config.mbus.retry_count,
             retry_delay=self.config.mbus.retry_delay,
+            should_stop=self._should_stop,
         )
         if self._mbus.endpoint.type == "tcp":
             logger.info(
@@ -134,7 +142,7 @@ class Daemon:
 
     def _init_state_store(self) -> None:
         """Initialize persistent runtime state."""
-        self._state_store = StateStore()
+        self._state_store = StateStore(self._data_dir / "libmbus2mqtt.db")
 
     def _init_mqtt(self) -> None:
         """Initialize MQTT client and related components."""
@@ -150,6 +158,7 @@ class Daemon:
         self._command_handler = CommandHandler(self._mqtt)
         self._command_handler.on_rescan(self._request_rescan)
         self._command_handler.on_poll_interval_change(self._set_poll_interval)
+        self._command_handler.on_log_level_change(self._bridge_info.publish)
         self._command_handler.setup()
 
         # Initialize HA discovery if enabled
@@ -158,6 +167,7 @@ class Daemon:
                 self._mqtt,
                 self.config.homeassistant,
                 self._state_store,
+                templates_dir=self._data_dir / "templates",
             )
 
         self._mqtt.on_connect(self._on_mqtt_connect)
@@ -198,7 +208,26 @@ class Daemon:
             self._bridge_info.publish()
 
     def _on_mqtt_connect(self) -> None:
-        """Handle MQTT connection established."""
+        """Queue a republish; runs on the MQTT network thread, so it must stay trivial."""
+        self._republish_requested.set()
+        self._wake.set()
+
+    def _process_republish_request(self) -> None:
+        """Serve a queued post-connect republish on the main thread."""
+        if self._republish_requested.is_set():
+            self._republish_requested.clear()
+            self._republish_after_connect()
+
+    def _process_rescan_request(self) -> bool:
+        """Serve a queued rescan on the main thread; return whether one ran."""
+        if not self._rescan_requested.is_set():
+            return False
+        self._rescan_requested.clear()
+        self._scan_devices()
+        return True
+
+    def _republish_after_connect(self) -> None:
+        """Publish bridge info, discovery and retained device state after a (re)connect."""
         logger.info("MQTT connected, publishing discovery configs...")
 
         # Publish bridge info first so state payload is retained before discovery
@@ -235,7 +264,8 @@ class Daemon:
     def _request_rescan(self) -> None:
         """Request a device rescan on next loop iteration."""
         logger.info("Rescan requested via MQTT command")
-        self._rescan_requested = True
+        self._rescan_requested.set()
+        self._wake.set()
 
     def _set_poll_interval(self, interval: int) -> None:
         """Update poll interval."""
@@ -243,33 +273,43 @@ class Daemon:
         if self._bridge_info:
             self._bridge_info.set_poll_interval(interval)
             self._bridge_info.publish()
+        self._wake.set()
 
     def _run_loop(self) -> None:
-        """Main polling loop."""
-        while self._running:
-            loop_start = time.time()
+        """Poll on schedule and serve queued MQTT requests in between."""
+        last_poll_start: float | None = None
+        while not self._stop_requested:
+            self._process_republish_request()
+            if self._process_rescan_request():
+                last_poll_start = None  # poll newly found devices right away
+            if self._stop_requested:
+                break
 
-            # Handle rescan request
-            if self._rescan_requested:
-                self._scan_devices()
-                self._rescan_requested = False
+            now = time.monotonic()
+            if last_poll_start is None or now - last_poll_start >= self._poll_interval:
+                last_poll_start = now
+                loop_start = time.time()
+                self._poll_devices()
+                self._update_bridge_info(loop_start)
+                continue
 
-            # Poll all enabled devices
-            self._poll_devices()
+            sleep_time = self._poll_interval - (now - last_poll_start)
+            logger.debug(f"Sleeping for {sleep_time:.1f}s")
+            self._sleep(sleep_time)
 
-            # Update bridge info
-            self._update_bridge_info(loop_start)
-
-            # Wait for next poll interval
-            elapsed = time.time() - loop_start
-            sleep_time = max(0, self._poll_interval - elapsed)
-
-            if sleep_time > 0:
-                logger.debug(f"Sleeping for {sleep_time:.1f}s")
-                # Sleep in small chunks to allow for clean shutdown
-                sleep_end = time.time() + sleep_time
-                while self._running and time.time() < sleep_end:
-                    time.sleep(min(1.0, sleep_end - time.time()))
+    def _sleep(self, seconds: float, *, wake_on_requests: bool = True) -> None:
+        """Sleep until the deadline, shutdown, or (optionally) a queued MQTT request."""
+        deadline = time.monotonic() + seconds
+        while not self._stop_requested:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return
+            chunk = min(_STOP_CHECK_INTERVAL, remaining)
+            if not wake_on_requests:
+                time.sleep(chunk)
+            elif self._wake.wait(chunk):
+                self._wake.clear()
+                return
 
     def _poll_devices(self) -> None:
         """Poll all enabled devices."""
@@ -279,6 +319,8 @@ class Daemon:
         online_count = 0
 
         for device in self._devices.values():
+            if self._stop_requested:
+                break
             if not device.enabled:
                 continue
 
@@ -662,7 +704,7 @@ class Daemon:
         logger.info("Shutdown complete")
 
 
-def run_daemon(config: AppConfig) -> None:
+def run_daemon(config: AppConfig, *, data_dir: Path = DEFAULT_DATA_DIR) -> None:
     """Run the main daemon loop."""
-    daemon = Daemon(config)
+    daemon = Daemon(config, data_dir=data_dir)
     daemon.start()

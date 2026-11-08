@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import ssl
 from unittest.mock import MagicMock, patch
 
+import paho.mqtt.client as mqtt
 import pytest
 
 from libmbus2mqtt.config import MqttConfig
@@ -503,3 +505,124 @@ class TestMqttClientInternalCallbacks:
         client._on_disconnect(MagicMock(), None, None, 0, None)
 
         user_callback.assert_not_called()
+
+
+class TestMqttClientCallbackIsolation:
+    """User callbacks must never break the paho network thread."""
+
+    @pytest.fixture
+    def client(self) -> MqttClient:
+        client = MqttClient(MqttConfig(host="localhost", base_topic="test"))
+        client._client = MagicMock()
+        client._client.publish.return_value = MagicMock(rc=0)
+        return client
+
+    def test_connect_callback_error_is_logged_not_raised(
+        self, client: MqttClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client.on_connect(MagicMock(side_effect=RuntimeError("boom")))
+
+        client._on_connect(MagicMock(), None, None, MagicMock(value=0), None)
+
+        assert client.is_connected
+        assert client._connect_handled.is_set()
+        assert "Error in MQTT connect callback" in caplog.text
+
+    def test_disconnect_callback_error_is_logged_not_raised(
+        self, client: MqttClient, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client.on_disconnect(MagicMock(side_effect=RuntimeError("boom")))
+
+        client._on_disconnect(MagicMock(), None, None, MagicMock(), None)
+
+        assert "Error in MQTT disconnect callback" in caplog.text
+
+    @patch("libmbus2mqtt.mqtt.client.mqtt.Client")
+    def test_connect_returns_after_connect_callback_ran(self, mock_client_class: MagicMock) -> None:
+        client = MqttClient(MqttConfig(host="localhost"))
+        callback = MagicMock()
+        client.on_connect(callback)
+        paho = mock_client_class.return_value
+        paho.publish.return_value = MagicMock(rc=0)
+        paho.loop_start.side_effect = lambda: client._on_connect(
+            paho, None, None, MagicMock(value=0), None
+        )
+
+        client.connect()
+
+        callback.assert_called_once()
+
+
+class TestMqttClientTls:
+    """TLS setup on connect."""
+
+    def _connect(self, mock_client_class: MagicMock, config: MqttConfig) -> MagicMock:
+        paho = mock_client_class.return_value
+        with patch("threading.Event.wait", return_value=True):
+            MqttClient(config).connect()
+        return paho
+
+    @patch("libmbus2mqtt.mqtt.client.mqtt.Client")
+    def test_plain_connection_does_not_use_tls(self, mock_client_class: MagicMock) -> None:
+        paho = self._connect(mock_client_class, MqttConfig(host="broker"))
+        paho.tls_set.assert_not_called()
+        paho.connect.assert_called_once_with("broker", 1883, keepalive=60)
+
+    @patch("libmbus2mqtt.mqtt.client.mqtt.Client")
+    def test_tls_verifies_broker_with_given_files(self, mock_client_class: MagicMock) -> None:
+        config = MqttConfig(
+            host="broker",
+            tls={
+                "enabled": True,
+                "ca_certs": "/certs/ca.crt",
+                "certfile": "/certs/client.crt",
+                "keyfile": "/certs/client.key",
+            },
+        )
+
+        paho = self._connect(mock_client_class, config)
+
+        paho.tls_set.assert_called_once_with(
+            ca_certs="/certs/ca.crt",
+            certfile="/certs/client.crt",
+            keyfile="/certs/client.key",
+            cert_reqs=ssl.CERT_REQUIRED,
+        )
+        paho.tls_insecure_set.assert_not_called()
+        paho.connect.assert_called_once_with("broker", 8883, keepalive=60)
+
+    @pytest.mark.parametrize(
+        ("insecure", "verify_mode", "check_hostname"),
+        [(False, ssl.CERT_REQUIRED, True), (True, ssl.CERT_NONE, False)],
+    )
+    def test_insecure_turns_off_certificate_verification(
+        self,
+        insecure: bool,
+        verify_mode: ssl.VerifyMode,
+        check_hostname: bool,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # A real paho client: the SSL context it builds is what decides the handshake.
+        paho = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+        config = MqttConfig(host="192.168.1.10", tls={"enabled": True, "insecure": insecure})
+
+        MqttClient(config)._configure_tls(paho)
+
+        context = paho._ssl_context
+        assert context is not None
+        assert context.verify_mode == verify_mode
+        assert context.check_hostname is check_hostname
+        assert ("without verifying the broker certificate" in caplog.text) is insecure
+
+    @patch("libmbus2mqtt.mqtt.client.mqtt.Client")
+    def test_failed_handshake_becomes_connection_error(
+        self, mock_client_class: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        paho = mock_client_class.return_value
+        paho.connect.side_effect = ssl.SSLCertVerificationError("certificate verify failed")
+        client = MqttClient(MqttConfig(host="broker", tls={"enabled": True}))
+
+        with pytest.raises(ConnectionError, match="TLS handshake failed"):
+            client.connect()
+
+        assert "mqtt.tls.ca_certs" in caplog.text

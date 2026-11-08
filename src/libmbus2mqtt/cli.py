@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from libmbus2mqtt.constants import APP_NAME, APP_VERSION, DEFAULT_CONFIG_FILE
+from libmbus2mqtt.constants import APP_NAME, APP_VERSION, DEFAULT_CONFIG_FILE, DEFAULT_DATA_DIR
 from libmbus2mqtt.mbus.utils import check_tcp_connectivity, parse_mbus_device
+
+if TYPE_CHECKING:
+    from libmbus2mqtt.config import MqttTlsConfig
 
 app = typer.Typer(
     name=APP_NAME,
@@ -31,7 +36,7 @@ ConfigOption = Annotated[
     typer.Option(
         "--config",
         "-c",
-        help="Path to configuration file",
+        help=f"Path to configuration file [default: {DEFAULT_CONFIG_FILE}]",
         envvar="LIBMBUS2MQTT_CONFIG",
     ),
 ]
@@ -45,6 +50,61 @@ LogLevelOption = Annotated[
         envvar="LIBMBUS2MQTT_LOG_LEVEL",
     ),
 ]
+
+DataDirOption = Annotated[
+    Path,
+    typer.Option(
+        "--data-dir",
+        help="Directory for the database, user templates and log files",
+        envvar="LIBMBUS2MQTT_DATA_DIR",
+    ),
+]
+
+
+def _write_example_config(path: Path) -> None:
+    """Write the example config, private to its owner: it will hold MQTT credentials."""
+    from libmbus2mqtt.config import generate_example_config
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(generate_example_config())
+    # O_CREAT's mode does not apply to an existing file overwritten with --force.
+    with contextlib.suppress(OSError):
+        path.chmod(0o600)
+
+
+def _print_config_permission_error(config_path: Path) -> None:
+    """Explain an unreadable config file with the process identity and file owner."""
+    from libmbus2mqtt.preflight import describe_path, process_identity
+
+    console.print(
+        f"[red]Error:[/red] Cannot read configuration file {describe_path(config_path)} "
+        f"as {process_identity()}"
+    )
+
+
+def _run_preflight(
+    device: str, data_dir: Path | None = None, tls: MqttTlsConfig | None = None
+) -> None:
+    """Fail fast with an actionable message when storage, device or TLS files are inaccessible."""
+    from libmbus2mqtt.logging import get_logger
+    from libmbus2mqtt.preflight import (
+        PreflightError,
+        check_data_dir,
+        check_serial_device,
+        check_tls_files,
+    )
+
+    try:
+        if data_dir is not None:
+            check_data_dir(data_dir)
+        check_serial_device(device)
+        if tls is not None:
+            check_tls_files(tls)
+    except PreflightError as e:
+        get_logger("preflight").error(str(e))
+        raise typer.Exit(1) from None
 
 
 def version_callback(value: bool) -> None:
@@ -75,6 +135,7 @@ def main(
 def run(
     config: ConfigOption = None,
     log_level: LogLevelOption = None,
+    data_dir: DataDirOption = DEFAULT_DATA_DIR,
 ) -> None:
     """Start the libmbus2mqtt daemon."""
     from libmbus2mqtt.config import AppConfig
@@ -88,6 +149,14 @@ def run(
         setup_logging(level=log_level or "INFO")
         console.print(f"[red]Error:[/red] Configuration file not found: {config_path}")
         console.print(f"Run '[bold]{APP_NAME} config init[/bold]' to create one.")
+        console.print(
+            f"Docker: [bold]docker compose run --rm {APP_NAME} config init[/bold], "
+            "then edit data/config/config.yaml"
+        )
+        raise typer.Exit(1) from None
+    except PermissionError:
+        setup_logging(level=log_level or "INFO")
+        _print_config_permission_error(config_path)
         raise typer.Exit(1) from None
     except Exception as e:
         setup_logging(level=log_level or "INFO")
@@ -96,18 +165,28 @@ def run(
 
     # CLI --log-level overrides config if provided
     effective_level = log_level if log_level else app_config.logs.level
-    setup_logging(level=effective_level, logs_config=app_config.logs)
+    setup_logging(
+        level=effective_level,
+        logs_config=app_config.logs,
+        default_log_file=data_dir / "log" / f"{APP_NAME}.log",
+    )
+    _run_preflight(app_config.mbus.device, data_dir, tls=app_config.mqtt.tls)
 
     # Import and run main loop
     from libmbus2mqtt.main import run_daemon
 
-    run_daemon(app_config)
+    try:
+        run_daemon(app_config, data_dir=data_dir)
+    except ConnectionError:
+        # Already logged with the cause; a traceback adds nothing for the operator.
+        raise typer.Exit(1) from None
 
 
 @app.command()
 def scan(
     config: ConfigOption = None,
     log_level: LogLevelOption = None,
+    data_dir: DataDirOption = DEFAULT_DATA_DIR,
 ) -> None:
     """Scan for M-Bus devices (one-shot)."""
     from libmbus2mqtt.config import AppConfig
@@ -120,6 +199,10 @@ def scan(
         setup_logging(level=log_level or "INFO")
         console.print(f"[red]Error:[/red] Configuration file not found: {config_path}")
         raise typer.Exit(1) from None
+    except PermissionError:
+        setup_logging(level=log_level or "INFO")
+        _print_config_permission_error(config_path)
+        raise typer.Exit(1) from None
     except Exception as e:
         setup_logging(level=log_level or "INFO")
         console.print(f"[red]Error loading configuration:[/red] {e}")
@@ -127,7 +210,12 @@ def scan(
 
     # CLI --log-level overrides config if provided
     effective_level = log_level if log_level else app_config.logs.level
-    setup_logging(level=effective_level, logs_config=app_config.logs)
+    setup_logging(
+        level=effective_level,
+        logs_config=app_config.logs,
+        default_log_file=data_dir / "log" / f"{APP_NAME}.log",
+    )
+    _run_preflight(app_config.mbus.device)
 
     # Import and run scan
     from libmbus2mqtt.mbus.interface import MbusInterface
@@ -260,7 +348,10 @@ def install(
         SYSTEMD_SERVICE_NAME,
     )
     from libmbus2mqtt.installer import (
+        check_service_executable,
         confirm_action,
+        find_executable,
+        render_service,
         require_root,
         run_command,
         user_exists,
@@ -275,20 +366,39 @@ def install(
     if dry_run:
         console.print("[yellow]Dry-run mode - no changes will be made[/yellow]\n")
 
+    # The unit runs the same libmbus2mqtt as this command; make sure systemd can.
+    try:
+        executable = find_executable()
+    except FileNotFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
+    problem = check_service_executable(executable)
+    if problem:
+        console.print(f"[red]Error:[/red] {problem}")
+        raise typer.Exit(1)
+
+    service_config = SERVICE_CONFIG_DIR / "config.yaml"
+
     # Show what will be done and confirm
     console.print("This will:")
     console.print(f"  1. Create service user '{SERVICE_USER}' (if not exists)")
-    console.print(f"  2. Create directory {SERVICE_CONFIG_DIR}")
+    console.print(f"  2. Create {service_config} from the example (an existing file is kept)")
     console.print(f"  3. Create directory {SERVICE_DATA_DIR}")
-    console.print(f"  4. Install service file to {SYSTEMD_SERVICE_DIR / SYSTEMD_SERVICE_NAME}")
+    console.print(
+        f"  4. Install service file to {SYSTEMD_SERVICE_DIR / SYSTEMD_SERVICE_NAME} "
+        f"(runs {executable})"
+    )
     console.print("  5. Reload systemd daemon")
-    console.print("  6. Enable the service\n")
+    console.print("  6. Enable the service (it is not started)\n")
 
     if not confirm_action("Proceed with installation?", default=True, yes=yes):
         console.print("[yellow]Installation cancelled[/yellow]")
         raise typer.Exit(0)
 
     console.print()
+
+    # Resolve the packaged unit before making any system changes.
+    service_content = render_service(executable)
 
     # Create service user
     if not user_exists(SERVICE_USER):
@@ -303,13 +413,19 @@ def install(
     else:
         console.print(f"  [dim]User '{SERVICE_USER}' already exists[/dim]")
 
-    # Create config directory
-    console.print(f"Creating {SERVICE_CONFIG_DIR}...")
-    if dry_run:
+    # Create the config the service reads. ProtectSystem=strict keeps /etc read-only
+    # for the service, so owning the file only lets it read the MQTT credentials.
+    console.print(f"Creating {service_config}...")
+    config_created = not service_config.exists()
+    if not config_created:
+        console.print(f"  [dim]Keeping existing {service_config}[/dim]")
+    elif dry_run:
         run_command(["mkdir", "-p", str(SERVICE_CONFIG_DIR)], dry_run=True)
+        console.print(f"  Would write the example config (mode 0600, owner {SERVICE_USER})")
     else:
-        SERVICE_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        console.print(f"  [green]Created {SERVICE_CONFIG_DIR}[/green]")
+        _write_example_config(service_config)
+        shutil.chown(service_config, user=SERVICE_USER)
+        console.print(f"  [green]Created {service_config}[/green]")
 
     # Create data directory with proper ownership
     console.print(f"Creating {SERVICE_DATA_DIR}...")
@@ -323,20 +439,14 @@ def install(
         shutil.chown(SERVICE_DATA_DIR, user=SERVICE_USER, group=SERVICE_GROUP)
         console.print(f"  [green]Created {SERVICE_DATA_DIR}[/green]")
 
-    # Find and copy service file
+    # Install the service resource shipped in the wheel.
     console.print("Installing service file...")
-    service_src = _find_service_file()
-    if service_src is None:
-        console.print("[red]Error:[/red] Could not find libmbus2mqtt.service file")
-        console.print("Expected in package's systemd/ directory")
-        raise typer.Exit(1)
-
     service_dest = SYSTEMD_SERVICE_DIR / SYSTEMD_SERVICE_NAME
 
     if dry_run:
-        run_command(["cp", str(service_src), str(service_dest)], dry_run=True)
+        console.print(f"  Would write bundled service to {service_dest}")
     else:
-        shutil.copy2(service_src, service_dest)
+        service_dest.write_text(service_content)
         service_dest.chmod(0o644)
         console.print(f"  [green]Installed {service_dest}[/green]")
 
@@ -360,38 +470,18 @@ def install(
         console.print("[green]Installation complete![/green]")
         console.print()
         console.print("Next steps:")
+        action = "start" if config_created else "restart"
+        console.print(f"  1. Edit config:     [bold]sudo nano {service_config}[/bold]")
         console.print(
-            f"  1. Create config: [bold]sudo libmbus2mqtt config init -c {SERVICE_CONFIG_DIR / 'config.yaml'}[/bold]"
+            f"  2. Test (optional): [bold]sudo -u {SERVICE_USER} {executable} device-info[/bold]"
         )
         console.print(
-            f"  2. Edit config:   [bold]sudo nano {SERVICE_CONFIG_DIR / 'config.yaml'}[/bold]"
+            f"  3. {action.capitalize()} service: "
+            f"[bold]sudo systemctl {action} {SYSTEMD_SERVICE_NAME}[/bold]"
         )
         console.print(
-            f"  3. Start service: [bold]sudo systemctl start {SYSTEMD_SERVICE_NAME}[/bold]"
+            f"  4. Follow logs:     [bold]sudo journalctl -u {SYSTEMD_SERVICE_NAME} -f[/bold]"
         )
-        console.print(
-            f"  4. Check status:  [bold]sudo systemctl status {SYSTEMD_SERVICE_NAME}[/bold]"
-        )
-
-
-def _find_service_file() -> Path | None:
-    """Locate the bundled systemd service file."""
-    import libmbus2mqtt
-
-    pkg_dir = Path(libmbus2mqtt.__file__).parent
-
-    # Check various possible locations
-    candidates = [
-        pkg_dir.parent.parent / "systemd" / "libmbus2mqtt.service",  # Development
-        pkg_dir / "systemd" / "libmbus2mqtt.service",  # If bundled in package
-        Path("/usr/share/libmbus2mqtt/libmbus2mqtt.service"),  # System install
-    ]
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-
-    return None
 
 
 @app.command()
@@ -580,8 +670,6 @@ def config_init(
     ] = False,
 ) -> None:
     """Generate example configuration file."""
-    from libmbus2mqtt.config import generate_example_config
-
     config_path = Path(config) if config else DEFAULT_CONFIG_FILE
 
     if config_path.exists() and not force:
@@ -589,10 +677,13 @@ def config_init(
         console.print("Use [bold]--force[/bold] to overwrite")
         raise typer.Exit(1)
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with config_path.open("w") as f:
-        f.write(generate_example_config())
+    try:
+        _write_example_config(config_path)
+    except OSError as e:
+        console.print(f"[red]Error:[/red] Cannot write {config_path}: {e.strerror or e}")
+        if isinstance(e, PermissionError):
+            console.print("Run it with sudo, or pass a writable path with --config.")
+        raise typer.Exit(1) from None
 
     console.print(f"[green]Configuration file created:[/green] {config_path}")
     console.print("\nEdit the file and set required values:")
@@ -656,19 +747,19 @@ def libmbus_install(
     """Install libmbus from source (native installation)."""
     import shutil
     import subprocess
+    import tempfile
 
     from rich.progress import Progress, SpinnerColumn, TextColumn
 
-    from libmbus2mqtt.constants import (
-        LIBMBUS_BINARIES,
-        LIBMBUS_BUILD_DIR,
-        LIBMBUS_REPO,
-    )
+    from libmbus2mqtt.constants import LIBMBUS_BINARIES
     from libmbus2mqtt.installer import (
         check_command_available,
         confirm_action,
         find_libmbus_binaries,
+        get_libmbus_source,
+        get_libmbus_version,
         is_libmbus_installed,
+        prepare_libmbus_source,
         require_root,
         run_command,
     )
@@ -698,7 +789,7 @@ def libmbus_install(
     dep_checks = {
         "git": "git",
         "build-essential": "gcc",
-        "libtool": "libtool",
+        "libtool": "libtoolize",
         "autoconf": "autoconf",
         "automake": "automake",
     }
@@ -711,6 +802,12 @@ def libmbus_install(
             console.print(f"  [red]MISSING[/red] {pkg}")
             missing_deps.append(pkg)
 
+    if check_command_available("aclocal"):
+        result = run_command(["aclocal", "--print-ac-dir"], capture_output=True)
+        if result is not None and not (Path(result.stdout.strip()) / "ltdl.m4").is_file():
+            console.print("  [red]MISSING[/red] libltdl-dev (ltdl.m4)")
+            missing_deps.append("libltdl-dev")
+
     if missing_deps:
         console.print()
         console.print("[red]Error:[/red] Missing build dependencies")
@@ -722,8 +819,12 @@ def libmbus_install(
 
     # Show plan and confirm
     console.print("This will:")
-    console.print(f"  1. Clone {LIBMBUS_REPO}")
-    console.print(f"  2. Build libmbus in {LIBMBUS_BUILD_DIR}")
+    source_repo, source_commit = get_libmbus_source()
+    console.print(
+        f"  1. Fetch libmbus {get_libmbus_version()} ({source_repo} at {source_commit[:12]}) "
+        "and apply the TCP timeout patch"
+    )
+    console.print("  2. Build libmbus in a new private temporary directory")
     console.print(f"  3. Install binaries to {install_path}")
     console.print(f"     - {', '.join(LIBMBUS_BINARIES)}")
     console.print("  4. Install libraries to /usr/local/lib")
@@ -737,36 +838,27 @@ def libmbus_install(
 
     console.print()
 
-    # Create and clean build directory
-    build_dir = LIBMBUS_BUILD_DIR
+    # Build as root in a fresh mkdtemp() directory (mode 0700): a fixed /tmp path could
+    # be pre-created or swapped by another local user to inject code into the build.
+    if dry_run:
+        build_dir = Path(tempfile.gettempdir()) / "libmbus-build-XXXXXXXX"
+    else:
+        build_dir = Path(tempfile.mkdtemp(prefix="libmbus-build-"))
     repo_dir = build_dir / "libmbus"
 
-    if build_dir.exists() and not dry_run:
-        console.print(f"Cleaning existing build directory {build_dir}...")
-        shutil.rmtree(build_dir)
-
-    if not dry_run:
-        build_dir.mkdir(parents=True, exist_ok=True)
-
     # Clone repository
-    console.print("Cloning libmbus repository...")
+    console.print("Preparing pinned libmbus sources...")
     if dry_run:
-        run_command(
-            ["git", "clone", "--depth", "1", LIBMBUS_REPO, str(repo_dir)],
-            dry_run=True,
-        )
+        prepare_libmbus_source(repo_dir, dry_run=True)
     else:
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console,
         ) as progress:
-            progress.add_task("Cloning...", total=None)
-            run_command(
-                ["git", "clone", "--depth", "1", LIBMBUS_REPO, str(repo_dir)],
-                capture_output=True,
-            )
-        console.print("  [green]Repository cloned[/green]")
+            progress.add_task("Fetching and patching...", total=None)
+            prepare_libmbus_source(repo_dir)
+        console.print("  [green]Pinned sources ready[/green]")
 
     # Build libmbus
     console.print("Building libmbus...")
@@ -797,10 +889,14 @@ def libmbus_install(
     # Install
     console.print("Installing binaries and libraries...")
     if dry_run:
-        run_command(["make", "install"], dry_run=True, description="Install to system")
+        run_command(
+            ["make", "install", f"bindir={install_path}"],
+            dry_run=True,
+            description="Install to system",
+        )
     else:
         result = subprocess.run(
-            ["make", "install"],
+            ["make", "install", f"bindir={install_path}"],
             cwd=repo_dir,
             capture_output=True,
             text=True,
@@ -838,6 +934,8 @@ def libmbus_install(
         console.print("Cleaning up build directory...")
         shutil.rmtree(build_dir, ignore_errors=True)
         console.print("  [green]Build directory removed[/green]")
+    elif keep_build and not dry_run:
+        console.print(f"Build directory kept: {build_dir}")
 
     # Done
     console.print()

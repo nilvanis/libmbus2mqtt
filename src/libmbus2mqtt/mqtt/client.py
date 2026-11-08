@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import ssl
 import threading
 import uuid
 from collections.abc import Callable
@@ -38,6 +39,8 @@ class MqttClient:
         self.config = config
         self._client: mqtt.Client | None = None
         self._connected = threading.Event()
+        # Set once _on_connect, including the user callback, has finished.
+        self._connect_handled = threading.Event()
         self._stopping = False
         self._command_callbacks: dict[str, CommandCallback] = {}
         self._on_connect_callback: Callable[[], None] | None = None
@@ -81,24 +84,65 @@ class MqttClient:
                 self.config.password,
             )
 
+        if self.config.tls.enabled:
+            self._configure_tls(self._client)
+
         # Set last will for bridge availability
         will_topic = TOPIC_BRIDGE_STATE.format(base=self.base_topic)
         self._client.will_set(will_topic, "offline", qos=1, retain=True)
 
         # Connect
-        self._client.connect(
-            self.config.host,
-            self.config.port,
-            keepalive=self.config.keepalive,
-        )
+        self._connect_handled.clear()
+        try:
+            self._client.connect(
+                self.config.host,
+                self.config.port,
+                keepalive=self.config.keepalive,
+            )
+        except ssl.SSLError as e:
+            logger.error(
+                "TLS connection to %s:%s failed: %s. Check that the broker serves TLS on "
+                "this port, that mqtt.tls.ca_certs is the CA that signed its certificate "
+                "(for a self-signed certificate: the certificate itself) and that the "
+                "certificate lists the host name you connect to. mqtt.tls.insecure: true "
+                "skips this verification.",
+                self.config.host,
+                self.config.port,
+                e,
+            )
+            raise ConnectionError(f"MQTT TLS handshake failed: {e}") from None
 
         # Start network loop in background thread
         self._client.loop_start()
 
-        # Wait for connection
-        if not self._connected.wait(timeout=10):
+        # Wait until the connection is up and the connect callback has run, so the
+        # caller sees any work that callback queued.
+        if not self._connect_handled.wait(timeout=10):
             logger.error("Failed to connect to MQTT broker within timeout")
             raise ConnectionError("MQTT connection timeout")
+
+    def _configure_tls(self, client: mqtt.Client) -> None:
+        """Enable TLS; the broker certificate is verified unless tls.insecure is set."""
+        tls = self.config.tls
+        client.tls_set(
+            ca_certs=str(tls.ca_certs) if tls.ca_certs else None,
+            certfile=str(tls.certfile) if tls.certfile else None,
+            keyfile=str(tls.keyfile) if tls.keyfile else None,
+            # With CERT_NONE paho also turns off the hostname check.
+            cert_reqs=ssl.CERT_NONE if tls.insecure else ssl.CERT_REQUIRED,
+        )
+        if tls.insecure:
+            logger.warning(
+                "MQTT over TLS without verifying the broker certificate (mqtt.tls.insecure; "
+                "client certificate: %s)",
+                tls.certfile or "none",
+            )
+        else:
+            logger.info(
+                "MQTT over TLS (CA: %s, client certificate: %s)",
+                tls.ca_certs or "system",
+                tls.certfile or "none",
+            )
 
     def disconnect(self) -> None:
         """Disconnect from MQTT broker."""
@@ -135,9 +179,14 @@ class MqttClient:
             # Publish online status
             self.publish_bridge_state("online")
 
-            # Call user callback if set
+            # An exception escaping a paho callback stops the network thread and with
+            # it every future reconnect, so never let one through.
             if self._on_connect_callback:
-                self._on_connect_callback()
+                try:
+                    self._on_connect_callback()
+                except Exception:
+                    logger.exception("Error in MQTT connect callback")
+            self._connect_handled.set()
         else:
             logger.error(f"Failed to connect: {reason_code}")
 
@@ -154,7 +203,10 @@ class MqttClient:
         if not self._stopping:
             logger.warning(f"Disconnected from MQTT broker: {reason_code}")
             if self._on_disconnect_callback:
-                self._on_disconnect_callback()
+                try:
+                    self._on_disconnect_callback()
+                except Exception:
+                    logger.exception("Error in MQTT disconnect callback")
 
     def _on_message(
         self,

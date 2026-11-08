@@ -10,6 +10,7 @@ from libmbus2mqtt.constants import (
     APP_NAME,
     APP_VERSION,
     HA_DEFAULT_DISCOVERY_PREFIX,
+    LOG_LEVELS,
     TOPIC_BRIDGE_STATE,
     TOPIC_DEVICE_AVAILABILITY,
     TOPIC_DEVICE_ENTITY_AVAILABILITY,
@@ -19,6 +20,8 @@ from libmbus2mqtt.logging import get_logger
 from libmbus2mqtt.templates import TemplateSelection, resolve_template
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from libmbus2mqtt.config import HomeAssistantConfig
     from libmbus2mqtt.models.device import Device
     from libmbus2mqtt.mqtt.client import MqttClient
@@ -81,10 +84,13 @@ class HomeAssistantDiscovery:
         mqtt_client: MqttClient,
         config: HomeAssistantConfig,
         state_store: StateStore | None = None,
+        *,
+        templates_dir: Path | None = None,
     ) -> None:
         self.mqtt = mqtt_client
         self.config = config
         self.state_store = state_store
+        self.templates_dir = templates_dir
         self._published_entities: set[str] = set()
 
     @property
@@ -178,7 +184,7 @@ class HomeAssistantDiscovery:
             command_topic=f"{base}/command/log_level",
             state_topic=f"{base}/bridge/info",
             value_template="{{ value_json.log_level }}",
-            options=["DEBUG", "INFO", "WARNING", "ERROR"],
+            options=list(LOG_LEVELS),
             icon="mdi:text-box-outline",
             entity_category="config",
         )
@@ -403,6 +409,7 @@ class HomeAssistantDiscovery:
             product_name=device.model,
             data_record_count=device.datarecord_count or None,
             explicit_filename=device.template_name,
+            templates_dir=self.templates_dir,
         )
         if selection.template:
             logger.debug(

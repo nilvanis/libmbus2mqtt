@@ -10,30 +10,27 @@ permissions:
   contents: write
 
 jobs:
-  build-wheel:
-    name: Build Wheel
+  validate-version:
+    name: Validate release version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Set up Python
-        run: uv python install 3.11
-
-      - name: Build wheel
-        run: uv build
-
-      - name: Upload wheel artifact
-        uses: actions/upload-artifact@v7
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
-          name: dist
-          path: dist/
-          retention-days: 5
+          version: "0.13.6"
+      - run: uv python install 3.11
+      - name: Compare tag with the package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: uv run --locked --extra dev --python 3.11 python scripts/check_release_version.py "$RELEASE_TAG"
+
+  checks:
+    needs: [validate-version]
+    uses: ./.github/workflows/checks.yml
 
   build-and-push-docker:
     name: Build & Push Docker
+    needs: [checks]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -75,7 +72,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [build-wheel, build-and-push-docker]
+    needs: [checks, build-and-push-docker]
     steps:
       - uses: actions/checkout@v7
 

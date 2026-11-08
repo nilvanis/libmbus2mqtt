@@ -1,0 +1,17 @@
+.git
+.venv
+**/__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage*
+dist
+build
+data
+log
+config.yaml
+.env
+_do_not_upload
+.agents
+.codex
+.aws

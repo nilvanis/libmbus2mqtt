@@ -205,6 +205,13 @@ class TestDeviceConfig:
 class TestLogsConfig:
     """Tests for LogsConfig model."""
 
+    def test_file_logs_and_rotation_enabled_by_default(self) -> None:
+        config = LogsConfig()
+        assert config.save_to_file
+        assert config.file is None
+        assert config.max_size_mb == 10
+        assert config.backup_count == 5
+
     def test_valid_log_level_debug(self) -> None:
         """Test DEBUG log level is valid."""
         config = LogsConfig(level="DEBUG")
@@ -356,6 +363,58 @@ devices:
         with pytest.raises(ValidationError):
             AppConfig.from_yaml(config_file)
 
+    @pytest.mark.parametrize("custom_log_file", [False, True])
+    def test_save_preserves_log_file_setting(self, tmp_path: Path, custom_log_file: bool) -> None:
+        log_file = tmp_path / "custom.log" if custom_log_file else None
+        config = AppConfig(
+            mbus=MbusConfig(device="/dev/ttyUSB0"),
+            mqtt=MqttConfig(host="localhost"),
+            logs=LogsConfig(file=log_file),
+        )
+        config_file = tmp_path / "config.yaml"
+        config.save(config_file)
+        restored = AppConfig.load(config_file)
+        assert restored.logs.file == log_file
+        assert restored.logs.save_to_file
+        assert "data_dir" not in yaml.safe_load(config_file.read_text())
+
+    def test_password_override_does_not_leak_into_log_records(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            yaml.safe_dump(
+                {
+                    "mbus": {"device": "/dev/ttyUSB0"},
+                    "mqtt": {"host": "localhost", "password": "yaml-sensitive-value"},
+                }
+            )
+        )
+        monkeypatch.setenv("LIBMBUS2MQTT_MQTT_PASSWORD", "env-sensitive-value")
+        with caplog.at_level("INFO", logger="libmbus2mqtt.config"):
+            config = AppConfig.load(config_file)
+        assert config.mqtt.password == "env-sensitive-value"
+        assert "LIBMBUS2MQTT_MQTT_PASSWORD" in caplog.text
+        assert "***" in caplog.text
+        # Check deferred arguments as well as the rendered message.
+        captured = caplog.text + repr([record.args for record in caplog.records])
+        assert "yaml-sensitive-value" not in captured
+        assert "env-sensitive-value" not in captured
+
+    def test_validation_errors_hide_passwords(self, tmp_path: Path) -> None:
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(
+            yaml.safe_dump(
+                {
+                    "mbus": {"device": "/dev/ttyUSB0"},
+                    "mqtt": {"password": "hidden-on-invalid-config"},
+                }
+            )
+        )
+        with pytest.raises(ValidationError) as error:
+            AppConfig.load(config_file)
+        assert "hidden-on-invalid-config" not in str(error.value)
+
 
 class TestGenerateExampleConfig:
     """Tests for generate_example_config function."""
@@ -373,3 +432,71 @@ class TestGenerateExampleConfig:
         example = generate_example_config()
         assert "device:" in example
         assert "host:" in example
+
+
+class TestMqttTlsConfig:
+    """TLS settings for the broker connection."""
+
+    def test_disabled_by_default(self) -> None:
+        config = MqttConfig(host="broker")
+        assert config.tls.enabled is False
+        assert config.port == 1883
+
+    def test_tls_defaults_to_port_8883(self) -> None:
+        config = MqttConfig(host="broker", tls={"enabled": True})
+        assert config.port == 8883
+
+    def test_explicit_port_wins_over_tls_default(self) -> None:
+        config = MqttConfig(host="broker", port=1883, tls={"enabled": True})
+        assert config.port == 1883
+
+    def test_keyfile_requires_certfile(self) -> None:
+        with pytest.raises(ValidationError, match="keyfile requires"):
+            MqttConfig(host="broker", tls={"enabled": True, "keyfile": "/certs/client.key"})
+
+    def test_files_without_enabled_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        MqttConfig(host="broker", tls={"ca_certs": "/certs/ca.crt"})
+        assert "connecting without TLS" in caplog.text
+
+    def test_insecure_with_ca_certs_warns(self, caplog: pytest.LogCaptureFixture) -> None:
+        MqttConfig(
+            host="broker", tls={"enabled": True, "insecure": True, "ca_certs": "/certs/ca.crt"}
+        )
+        assert "mqtt.tls.ca_certs is not used" in caplog.text
+
+    def test_insecure_without_ca_certs_does_not_warn(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        MqttConfig(host="broker", tls={"enabled": True, "insecure": True})
+        assert caplog.text == ""
+
+    def test_environment_configures_tls(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("mbus:\n  device: /dev/ttyUSB0\nmqtt:\n  host: broker\n")
+        monkeypatch.setenv("LIBMBUS2MQTT_MQTT_TLS_ENABLED", "true")
+        monkeypatch.setenv("LIBMBUS2MQTT_MQTT_TLS_CA_CERTS", "/certs/ca.crt")
+        monkeypatch.setenv("LIBMBUS2MQTT_MQTT_TLS_CERTFILE", "/certs/client.crt")
+        monkeypatch.setenv("LIBMBUS2MQTT_MQTT_TLS_KEYFILE", "/certs/client.key")
+        monkeypatch.setenv("LIBMBUS2MQTT_MQTT_TLS_INSECURE", "true")
+
+        tls = AppConfig.load(config_file).mqtt.tls
+
+        assert tls.enabled and tls.insecure
+        assert tls.ca_certs == Path("/certs/ca.crt")
+        assert tls.certfile == Path("/certs/client.crt")
+        assert tls.keyfile == Path("/certs/client.key")
+
+    def test_save_round_trips_tls_paths(self, tmp_path: Path) -> None:
+        config = AppConfig(
+            mbus=MbusConfig(device="/dev/ttyUSB0"),
+            mqtt=MqttConfig(host="broker", tls={"enabled": True, "ca_certs": "/certs/ca.crt"}),
+        )
+        config_file = tmp_path / "saved.yaml"
+
+        config.save(config_file)
+
+        loaded = AppConfig.load(config_file)
+        assert loaded.mqtt.tls.ca_certs == Path("/certs/ca.crt")
+        assert loaded.mqtt.port == 8883

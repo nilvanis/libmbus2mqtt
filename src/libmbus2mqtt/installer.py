@@ -4,19 +4,108 @@ from __future__ import annotations
 
 import os
 import pwd
+import re
 import shutil
 import subprocess
+import sys
+from importlib.resources import files
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from rich.console import Console
 
-from libmbus2mqtt.constants import LIBMBUS_BINARIES, LIBMBUS_DEFAULT_INSTALL_PATH
+from libmbus2mqtt.constants import APP_NAME, LIBMBUS_BINARIES, LIBMBUS_DEFAULT_INSTALL_PATH
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 console = Console()
+
+
+def _libmbus_settings() -> dict[str, str]:
+    """Parse the libmbus pin shared with Docker from the installed package."""
+    return dict(
+        line.split("=", 1)
+        for line in files("libmbus2mqtt").joinpath("resources/libmbus.env").read_text().splitlines()
+        if line and not line.startswith("#")
+    )
+
+
+def get_libmbus_source() -> tuple[str, str]:
+    """Return the libmbus repository and the pinned commit."""
+    settings = _libmbus_settings()
+    return settings["LIBMBUS_REPO"], settings["LIBMBUS_COMMIT"]
+
+
+def get_libmbus_version() -> str:
+    """Return the libmbus release the pinned commit belongs to."""
+    return _libmbus_settings()["LIBMBUS_VERSION"]
+
+
+def prepare_libmbus_source(repo_dir: Path, *, dry_run: bool = False) -> None:
+    """Fetch the exact upstream revision and apply the shared TCP timeout patch."""
+    from importlib.resources import as_file
+
+    repo, commit = get_libmbus_source()
+    run_command(["git", "init", str(repo_dir)], dry_run=dry_run)
+    run_command(["git", "fetch", "--depth", "1", repo, commit], cwd=repo_dir, dry_run=dry_run)
+    run_command(["git", "checkout", "--detach", commit], cwd=repo_dir, dry_run=dry_run)
+    patch = files("libmbus2mqtt").joinpath("resources/libmbus-tcp-timeout.patch")
+    with as_file(patch) as patch_path:
+        run_command(["git", "apply", "--check", str(patch_path)], cwd=repo_dir, dry_run=dry_run)
+        run_command(["git", "apply", str(patch_path)], cwd=repo_dir, dry_run=dry_run)
+
+
+def get_service_content() -> str:
+    """Read the systemd unit included in both wheel and source installations."""
+    return files("libmbus2mqtt").joinpath("resources/libmbus2mqtt.service").read_text()
+
+
+# Hidden from the service by ProtectHome=yes in the bundled unit.
+_SERVICE_HIDDEN_DIRS = (Path("/home"), Path("/root"), Path("/run/user"))
+
+
+def find_executable() -> Path:
+    """Locate the libmbus2mqtt command the service should run: the one running now."""
+    candidates = [Path(sys.argv[0]), Path(sys.executable).parent / APP_NAME]
+    on_path = shutil.which(APP_NAME)
+    if on_path:
+        candidates.append(Path(on_path))
+    for candidate in candidates:
+        if candidate.name == APP_NAME and candidate.is_file() and os.access(candidate, os.X_OK):
+            # Not resolve(): keep a /usr/local/bin symlink as the stable path in the unit.
+            return candidate.absolute()
+    msg = f"Cannot locate the {APP_NAME} executable; run this command through it."
+    raise FileNotFoundError(msg)
+
+
+def check_service_executable(executable: Path) -> str | None:
+    """Explain why the systemd service could not run ``executable``, or return None."""
+    if any(char.isspace() for char in str(executable)):
+        return f"{executable} contains whitespace, which ExecStart= does not accept unquoted."
+    resolved = executable.resolve()
+    if any(resolved.is_relative_to(hidden) for hidden in _SERVICE_HIDDEN_DIRS):
+        return (
+            f"{executable} resolves to {resolved}, which the service cannot access "
+            "(ProtectHome=yes). Install libmbus2mqtt system-wide, e.g. in a virtualenv "
+            "under /opt/libmbus2mqtt."
+        )
+    return None
+
+
+def render_service(executable: Path) -> str:
+    """Return the bundled unit with ExecStart pointing at ``executable``."""
+    rendered, count = re.subn(
+        r"^ExecStart=\S+",
+        lambda _match: f"ExecStart={executable}",
+        get_service_content(),
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if count != 1:
+        msg = "Bundled service file has no ExecStart= line"
+        raise RuntimeError(msg)
+    return rendered
 
 
 def is_root() -> bool:

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import subprocess
+import threading
+import time
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from libmbus2mqtt.mbus import interface as interface_module
 from libmbus2mqtt.mbus.interface import SCAN_PATTERN, MbusInterface
 
 # Shared fixtures
@@ -160,7 +163,7 @@ Found a M-Bus device at address 10
 """
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout=scan_output, stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         devices = interface.scan()
         assert devices == [1, 5, 10]
@@ -173,7 +176,7 @@ Found a M-Bus device at address 10
         """Test scan returns empty list when no devices found."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         devices = interface.scan()
         assert devices == []
@@ -188,7 +191,7 @@ Found a M-Bus device at address 10
         def mock_run(*args: object, **kwargs: object) -> None:
             raise subprocess.TimeoutExpired("cmd", 60)
 
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         devices = interface.scan(timeout=60)
         assert devices == []
@@ -203,7 +206,7 @@ Found a M-Bus device at address 10
         def mock_run(*args: object, **kwargs: object) -> None:
             raise OSError("Device error")
 
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         devices = interface.scan()
         assert devices == []
@@ -217,7 +220,7 @@ Found a M-Bus device at address 10
         """Test scan uses correct command arguments."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         interface.scan(timeout=30)
 
@@ -269,7 +272,7 @@ class TestMbusInterfacePollRaw:
         """Test poll_raw returns XML string."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout=apator_xml, stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         result = interface.poll_raw(1)
         assert result == apator_xml
@@ -282,7 +285,7 @@ class TestMbusInterfacePollRaw:
         """Test poll_raw returns None on error."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout="", stderr="Error", returncode=1)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         result = interface.poll_raw(1)
         assert result is None
@@ -297,7 +300,7 @@ class TestMbusInterfacePollRaw:
         def mock_run(*args: object, **kwargs: object) -> None:
             raise subprocess.TimeoutExpired("cmd", 10)
 
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         result = interface.poll_raw(1, timeout=10)
         assert result is None
@@ -312,7 +315,7 @@ class TestMbusInterfacePollRaw:
         def mock_run(*args: object, **kwargs: object) -> None:
             raise OSError("Device error")
 
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         result = interface.poll_raw(1)
         assert result is None
@@ -326,7 +329,7 @@ class TestMbusInterfacePollRaw:
         """Test poll_raw uses correct command arguments."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         interface.poll_raw(42, timeout=15)
 
@@ -352,7 +355,7 @@ class TestMbusInterfacePollRaw:
         """Test poll_raw logs warning for device ID 0."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         interface.poll_raw(0)
         assert "device ID 0" in caplog.text
@@ -393,7 +396,7 @@ class TestMbusInterfacePoll:
         """Test poll returns parsed MbusData."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout=apator_xml, stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         result = interface.poll(1)
 
@@ -409,7 +412,7 @@ class TestMbusInterfacePoll:
         """Test poll returns None when poll_raw fails."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout="", stderr="Error", returncode=1)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         result = interface.poll(1)
         assert result is None
@@ -422,7 +425,7 @@ class TestMbusInterfacePoll:
         """Test poll returns None when parsing fails."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout="invalid xml", stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         result = interface.poll(1)
         assert result is None
@@ -508,7 +511,7 @@ class TestMbusInterfaceTcp:
         """TCP scan should call mbus-tcp-scan host port."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout="", stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         tcp_interface.scan(timeout=5)
 
@@ -524,7 +527,7 @@ class TestMbusInterfaceTcp:
         """TCP poll_raw should call mbus-tcp-request-data host port id."""
         mock_run = MagicMock()
         mock_run.return_value = MagicMock(stdout="<xml/>", stderr="", returncode=0)
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         tcp_interface.poll_raw(3, timeout=4)
 
@@ -572,7 +575,7 @@ class TestMbusInterfaceRetries:
                 raise response
             return response
 
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         result = interface_with_retries.poll_raw(1, timeout=10)
         assert result == "xml-data"
@@ -584,8 +587,8 @@ class TestMbusInterfaceRetries:
     ) -> None:
         """Poll should return None after exhausting retries."""
         monkeypatch.setattr(
-            subprocess,
-            "run",
+            interface_module,
+            "run_command",
             MagicMock(side_effect=subprocess.CalledProcessError(1, "cmd")),
         )
 
@@ -610,7 +613,84 @@ class TestMbusInterfaceRetries:
         def mock_run(*args: object, **kwargs: object) -> MagicMock:
             return attempts.pop(0)
 
-        monkeypatch.setattr(subprocess, "run", mock_run)
+        monkeypatch.setattr(interface_module, "run_command", mock_run)
 
         devices = interface_with_retries.scan(timeout=5)
         assert devices == [3, 7]
+
+
+# ============================================================================
+# Interruptible command execution
+# ============================================================================
+
+
+class TestRunCommand:
+    """run_command runs real processes and kills them on timeout or shutdown."""
+
+    def test_returns_exit_code_and_output(self) -> None:
+        result = interface_module.run_command(
+            ["sh", "-c", "echo out; echo err >&2; exit 3"], timeout=5
+        )
+        assert (result.returncode, result.stdout, result.stderr) == (3, "out\n", "err\n")
+
+    def test_timeout_kills_command(self) -> None:
+        started = time.monotonic()
+        with pytest.raises(subprocess.TimeoutExpired):
+            interface_module.run_command(["sleep", "30"], timeout=0.3)
+        assert time.monotonic() - started < 5
+
+    def test_shutdown_request_kills_running_command(self) -> None:
+        stop_at = time.monotonic() + 0.3
+        started = time.monotonic()
+        with pytest.raises(interface_module.CommandCancelledError):
+            interface_module.run_command(
+                ["sleep", "30"], timeout=60, should_stop=lambda: time.monotonic() > stop_at
+            )
+        assert time.monotonic() - started < 5
+
+    def test_pending_shutdown_does_not_start_command(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        popen = MagicMock()
+        monkeypatch.setattr(subprocess, "Popen", popen)
+        with pytest.raises(interface_module.CommandCancelledError):
+            interface_module.run_command(["sleep", "30"], timeout=60, should_stop=lambda: True)
+        popen.assert_not_called()
+
+
+class TestShutdownDuringRetries:
+    """A shutdown request ends scan/poll without further attempts."""
+
+    def test_cancelled_scan_is_not_retried(
+        self, mock_libmbus_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        interface = MbusInterface(
+            device="/dev/ttyUSB0", libmbus_path=mock_libmbus_path, retry_count=3, retry_delay=0
+        )
+        run = MagicMock(side_effect=interface_module.CommandCancelledError("mbus-serial-scan"))
+        monkeypatch.setattr(interface_module, "run_command", run)
+
+        assert interface.scan() == []
+        run.assert_called_once()
+
+    def test_shutdown_during_retry_delay_aborts_poll(
+        self, mock_libmbus_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        stopped: list[bool] = []
+        interface = MbusInterface(
+            device="/dev/ttyUSB0",
+            libmbus_path=mock_libmbus_path,
+            retry_count=3,
+            retry_delay=30,
+            should_stop=lambda: bool(stopped),
+        )
+
+        def fail(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            threading.Timer(0.1, stopped.append, args=(True,)).start()
+            return subprocess.CompletedProcess(cmd, 1, "", "no answer")
+
+        run = MagicMock(side_effect=fail)
+        monkeypatch.setattr(interface_module, "run_command", run)
+
+        started = time.monotonic()
+        assert interface.poll_raw(1, timeout=5) is None
+        assert time.monotonic() - started < 2
+        run.assert_called_once()

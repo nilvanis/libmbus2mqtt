@@ -10,3 +10,6 @@ services:
       - /dev/ttyUSB0:/dev/ttyUSB0
     environment:
       TZ: Europe/Warsaw
+      # Owner of ./data on the host (check with: id -u / id -g)
+      PUID: 1000
+      PGID: 1000

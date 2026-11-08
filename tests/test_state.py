@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import MagicMock, call
 
@@ -56,7 +57,7 @@ def daemon(minimal_app_config, state_store: StateStore) -> Daemon:
 
 def count_identities(state_store: StateStore) -> int:
     """Return number of persisted device identities."""
-    with sqlite3.connect(state_store.db_path) as conn:
+    with closing(sqlite3.connect(state_store.db_path)) as conn:
         row = conn.execute("SELECT COUNT(*) FROM device_identity").fetchone()
     return 0 if row is None else int(row[0])
 
@@ -268,6 +269,7 @@ class TestDaemonIdentitySync:
         daemon._ha_discovery.reset_mock()
 
         daemon._on_mqtt_connect()
+        daemon._process_republish_request()
 
         daemon._ha_discovery.publish_device_discovery.assert_called_once_with(device_two)
         daemon._mqtt.publish_device_availability.assert_called_once_with("A1", "online")
@@ -323,6 +325,7 @@ class TestDaemonIdentitySync:
         daemon._bridge_info = MagicMock()
 
         daemon._on_mqtt_connect()
+        daemon._process_republish_request()
 
         daemon._mqtt.publish.assert_any_call(
             "libmbus2mqtt/device/A1/state",
@@ -348,6 +351,7 @@ class TestDaemonIdentitySync:
         daemon._mqtt.base_topic = "libmbus2mqtt"
 
         daemon._on_mqtt_connect()
+        daemon._process_republish_request()
 
         assert device.mbus_data is not None
         daemon._mqtt.publish_device_state.assert_called_once_with(

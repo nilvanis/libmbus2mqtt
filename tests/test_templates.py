@@ -204,6 +204,33 @@ class TestUserTemplates:
         assert template is not None
         assert template["0"]["name"] == "User Defined Sensor"
 
+    def test_caches_are_scoped_to_each_runtime_directory(self, tmp_path: Path) -> None:
+        for product in ["first", "second"]:
+            directory = tmp_path / product
+            directory.mkdir()
+            (directory / "index.json").write_text(
+                json.dumps(
+                    {
+                        "custom.json": {
+                            "Manufacturer": "XYZ",
+                            "ProductName": product,
+                            "DataRecordCount": 1,
+                        }
+                    }
+                )
+            )
+            (directory / "custom.json").write_text(
+                json.dumps({"0": {"name": product, "value_template": "{{ value_json.value }}"}})
+            )
+            selection = resolve_template(
+                manufacturer="XYZ",
+                product_name=product,
+                data_record_count=1,
+                templates_dir=directory,
+            )
+            assert selection.template is not None
+            assert selection.template["0"]["name"] == product
+
     def test_user_index_takes_priority_with_count(
         self,
         user_templates_dir: Path,

@@ -9,14 +9,14 @@ Type=simple
 User=libmbus2mqtt
 Group=dialout
 
-# Configuration file location
-Environment=LIBMBUS2MQTT_CONFIG=/etc/libmbus2mqtt/config.yaml
+StateDirectory=libmbus2mqtt
+StateDirectoryMode=0750
 
 # Working directory
 WorkingDirectory=/var/lib/libmbus2mqtt
 
 # Main command
-ExecStart=/usr/local/bin/libmbus2mqtt run
+ExecStart=/usr/local/bin/libmbus2mqtt run --config /etc/libmbus2mqtt/config.yaml --data-dir /var/lib/libmbus2mqtt
 
 # Restart policy
 Restart=on-failure
