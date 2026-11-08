@@ -1,5 +1,5 @@
 # Stage 1: Build the pinned libmbus sources with the shared TCP timeout patch.
-FROM debian:bookworm-slim AS libmbus-builder
+FROM debian:trixie-slim AS libmbus-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates git build-essential libtool libltdl-dev autoconf automake \
@@ -19,7 +19,7 @@ RUN . ./libmbus.env && \
     make install DESTDIR=/install
 
 # Stage 2: Install the project and runtime dependencies from uv.lock.
-FROM python:3.14.6-slim-bookworm AS python-builder
+FROM python:3.14-slim-trixie AS python-builder
 COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /usr/local/bin/uv
 
 WORKDIR /app
@@ -31,12 +31,16 @@ COPY src/ ./src/
 RUN uv sync --locked --no-dev --no-editable
 
 # Stage 3: Runtime image.
-FROM python:3.14.6-slim-bookworm
+FROM python:3.14-slim-trixie
 LABEL org.opencontainers.image.title="libmbus2mqtt"
 LABEL org.opencontainers.image.description="M-Bus to MQTT bridge with Home Assistant integration"
 LABEL org.opencontainers.image.source="https://github.com/nilvanis/libmbus2mqtt"
 
-RUN apt-get update && apt-get install -y --no-install-recommends libxml2 \
+# Upgrade first: Debian security fixes land here on every build instead of waiting
+# for the next rebuild of the Python base image.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends libxml2 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=libmbus-builder /install/usr/local/bin/mbus-* /usr/local/bin/
 COPY --from=libmbus-builder /install/usr/local/lib/libmbus* /usr/local/lib/
