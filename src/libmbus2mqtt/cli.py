@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -52,6 +54,30 @@ DataDirOption = Annotated[
 ]
 
 
+def _print_config_permission_error(config_path: Path) -> None:
+    """Explain an unreadable config file with the process identity and file owner."""
+    from libmbus2mqtt.preflight import describe_path, process_identity
+
+    console.print(
+        f"[red]Error:[/red] Cannot read configuration file {describe_path(config_path)} "
+        f"as {process_identity()}"
+    )
+
+
+def _run_preflight(device: str, data_dir: Path | None = None) -> None:
+    """Fail fast with an actionable message when storage or the device is inaccessible."""
+    from libmbus2mqtt.logging import get_logger
+    from libmbus2mqtt.preflight import PreflightError, check_data_dir, check_serial_device
+
+    try:
+        if data_dir is not None:
+            check_data_dir(data_dir)
+        check_serial_device(device)
+    except PreflightError as e:
+        get_logger("preflight").error(str(e))
+        raise typer.Exit(1) from None
+
+
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
@@ -94,6 +120,14 @@ def run(
         setup_logging(level=log_level or "INFO")
         console.print(f"[red]Error:[/red] Configuration file not found: {config_path}")
         console.print(f"Run '[bold]{APP_NAME} config init[/bold]' to create one.")
+        console.print(
+            f"Docker: [bold]docker compose run --rm {APP_NAME} config init[/bold], "
+            "then edit data/config/config.yaml"
+        )
+        raise typer.Exit(1) from None
+    except PermissionError:
+        setup_logging(level=log_level or "INFO")
+        _print_config_permission_error(config_path)
         raise typer.Exit(1) from None
     except Exception as e:
         setup_logging(level=log_level or "INFO")
@@ -107,6 +141,7 @@ def run(
         logs_config=app_config.logs,
         default_log_file=data_dir / "log" / f"{APP_NAME}.log",
     )
+    _run_preflight(app_config.mbus.device, data_dir)
 
     # Import and run main loop
     from libmbus2mqtt.main import run_daemon
@@ -131,6 +166,10 @@ def scan(
         setup_logging(level=log_level or "INFO")
         console.print(f"[red]Error:[/red] Configuration file not found: {config_path}")
         raise typer.Exit(1) from None
+    except PermissionError:
+        setup_logging(level=log_level or "INFO")
+        _print_config_permission_error(config_path)
+        raise typer.Exit(1) from None
     except Exception as e:
         setup_logging(level=log_level or "INFO")
         console.print(f"[red]Error loading configuration:[/red] {e}")
@@ -143,6 +182,7 @@ def scan(
         logs_config=app_config.logs,
         default_log_file=data_dir / "log" / f"{APP_NAME}.log",
     )
+    _run_preflight(app_config.mbus.device)
 
     # Import and run scan
     from libmbus2mqtt.mbus.interface import MbusInterface
@@ -373,17 +413,20 @@ def install(
         console.print("[green]Installation complete![/green]")
         console.print()
         console.print("Next steps:")
+        service_config = SERVICE_CONFIG_DIR / "config.yaml"
         console.print(
-            f"  1. Create config: [bold]sudo libmbus2mqtt config init -c {SERVICE_CONFIG_DIR / 'config.yaml'}[/bold]"
+            f"  1. Create config: [bold]sudo libmbus2mqtt config init -c {service_config}[/bold]"
         )
         console.print(
-            f"  2. Edit config:   [bold]sudo nano {SERVICE_CONFIG_DIR / 'config.yaml'}[/bold]"
+            f"  2. Let the service read it (file is private, mode 0600): "
+            f"[bold]sudo chown {SERVICE_USER} {service_config}[/bold]"
+        )
+        console.print(f"  3. Edit config:   [bold]sudo nano {service_config}[/bold]")
+        console.print(
+            f"  4. Start service: [bold]sudo systemctl start {SYSTEMD_SERVICE_NAME}[/bold]"
         )
         console.print(
-            f"  3. Start service: [bold]sudo systemctl start {SYSTEMD_SERVICE_NAME}[/bold]"
-        )
-        console.print(
-            f"  4. Check status:  [bold]sudo systemctl status {SYSTEMD_SERVICE_NAME}[/bold]"
+            f"  5. Check status:  [bold]sudo systemctl status {SYSTEMD_SERVICE_NAME}[/bold]"
         )
 
 
@@ -584,8 +627,13 @@ def config_init(
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with config_path.open("w") as f:
+    # The file holds MQTT credentials once edited: keep it private to its owner.
+    fd = os.open(config_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         f.write(generate_example_config())
+    # O_CREAT's mode does not apply to an existing file overwritten with --force.
+    with contextlib.suppress(OSError):
+        config_path.chmod(0o600)
 
     console.print(f"[green]Configuration file created:[/green] {config_path}")
     console.print("\nEdit the file and set required values:")

@@ -1,5 +1,7 @@
 """CLI checks that do not require system changes or live hardware."""
 
+import os
+import stat
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -41,9 +43,11 @@ def test_data_directory_is_selected_by_cli(
     run_daemon = MagicMock()
     interface = MagicMock()
     interface.return_value.scan.return_value = []
+    check_data_dir = MagicMock()
     monkeypatch.setattr("libmbus2mqtt.logging.setup_logging", setup_logging)
     monkeypatch.setattr("libmbus2mqtt.main.run_daemon", run_daemon)
     monkeypatch.setattr("libmbus2mqtt.mbus.interface.MbusInterface", interface)
+    monkeypatch.setattr("libmbus2mqtt.preflight.check_data_dir", check_data_dir)
     args = [command, "--config", str(config_file)]
     data_dir = tmp_path / "runtime" if custom_directory else Path("/data")
     if custom_directory:
@@ -56,9 +60,11 @@ def test_data_directory_is_selected_by_cli(
     assert setup_logging.call_args.kwargs["default_log_file"] == data_dir / "log/libmbus2mqtt.log"
     assert setup_logging.call_args.kwargs["logs_config"].save_to_file
     if command == "run":
+        check_data_dir.assert_called_once_with(data_dir)
         run_daemon.assert_called_once()
         assert run_daemon.call_args.kwargs["data_dir"] == data_dir
     else:
+        check_data_dir.assert_not_called()
         interface.return_value.scan.assert_called_once()
 
 
@@ -88,3 +94,42 @@ def test_invalid_config_does_not_print_password(tmp_path: Path) -> None:
     assert result.exit_code == 1
     assert "cli-secret-value" not in result.output
     assert "host" in result.output
+
+
+def test_config_init_creates_private_file(tmp_path: Path) -> None:
+    runner = CliRunner()
+    new_file = tmp_path / "new.yaml"
+    existing_file = tmp_path / "existing.yaml"
+    existing_file.write_text("old")
+    existing_file.chmod(0o644)
+
+    assert runner.invoke(app, ["config", "init", "--config", str(new_file)]).exit_code == 0
+    result = runner.invoke(app, ["config", "init", "--config", str(existing_file), "--force"])
+    assert result.exit_code == 0, result.output
+
+    assert stat.S_IMODE(new_file.stat().st_mode) == 0o600
+    assert stat.S_IMODE(existing_file.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses file permission checks")
+def test_run_stops_with_clear_error_on_unwritable_data_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("mbus:\n  device: /dev/simulated\nmqtt:\n  host: localhost\n")
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(mode=0o555)
+    run_daemon = MagicMock()
+    monkeypatch.setattr("libmbus2mqtt.logging.setup_logging", MagicMock())
+    monkeypatch.setattr("libmbus2mqtt.main.run_daemon", run_daemon)
+    try:
+        result = CliRunner().invoke(
+            app, ["run", "--config", str(config_file), "--data-dir", str(data_dir)]
+        )
+    finally:
+        data_dir.chmod(0o755)
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    assert "is not writable" in caplog.text
+    run_daemon.assert_not_called()
