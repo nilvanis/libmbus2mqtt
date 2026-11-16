@@ -19,7 +19,7 @@ RUN . ./libmbus.env && \
     make install DESTDIR=/install
 
 # Stage 2: Install the project and runtime dependencies from uv.lock.
-FROM python:3.14-slim-trixie AS python-builder
+FROM python:3.15-slim-trixie AS python-builder
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /usr/local/bin/uv
 
 WORKDIR /app
@@ -31,7 +31,7 @@ COPY src/ ./src/
 RUN uv sync --locked --no-dev --no-editable
 
 # Stage 3: Runtime image.
-FROM python:3.14-slim-trixie
+FROM python:3.15-slim-trixie
 LABEL org.opencontainers.image.title="libmbus2mqtt"
 LABEL org.opencontainers.image.description="M-Bus to MQTT bridge with Home Assistant integration"
 LABEL org.opencontainers.image.source="https://github.com/nilvanis/libmbus2mqtt"
